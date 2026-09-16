@@ -258,8 +258,8 @@ jobs:
 
       - name: Build
         run: |
-          gradle assembleDebug --no-configuration-cache 2>&1 | tee build.log
-          exit "${PIPESTATUS[0]}" --stacktrace
+          gradle assembleDebug --no-configuration-cache --stacktrace 2>&1 | tee build.log
+          exit "${PIPESTATUS[0]}"
 
       - name: Publish the Gradle wrapper for local use
         # The wrapper JAR is not committed (binary), so generate it here and ship
@@ -380,8 +380,8 @@ jobs:
 
       - name: Build (minified + resource-shrunk)
         run: |
-          gradle assembleRelease --no-configuration-cache 2>&1 | tee build.log
-          exit "${PIPESTATUS[0]}" --stacktrace
+          gradle assembleRelease --no-configuration-cache --stacktrace 2>&1 | tee build.log
+          exit "${PIPESTATUS[0]}"
 
       - uses: actions/upload-artifact@v4
         with:
