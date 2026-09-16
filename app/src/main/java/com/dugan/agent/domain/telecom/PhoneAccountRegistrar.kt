@@ -1,5 +1,6 @@
 package com.dugan.agent.domain.telecom
 
+import com.dugan.agent.util.AgentLog
 import android.app.role.RoleManager
 import android.content.ComponentName
 import android.content.Context
@@ -8,7 +9,6 @@ import android.os.Build
 import android.telecom.PhoneAccount
 import android.telecom.PhoneAccountHandle
 import android.telecom.TelecomManager
-import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -42,7 +42,7 @@ class PhoneAccountRegistrar @Inject constructor(
                 .setIsSelfManaged(true)
                 .build()
             telecom.registerPhoneAccount(account)
-        }.onFailure { Log.w(TAG, "PhoneAccount registration failed: ${it.message}") }
+        }.onFailure { AgentLog.w(TAG, "PhoneAccount registration failed: ${it.message}") }
     }
 
     fun isDefaultDialer(): Boolean {

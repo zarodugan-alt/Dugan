@@ -1,5 +1,6 @@
 package com.dugan.agent.domain.audio
 
+import com.dugan.agent.util.AgentLog
 import android.annotation.SuppressLint
 import android.media.AudioFormat
 import android.media.AudioRecord
@@ -7,7 +8,6 @@ import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.AutomaticGainControl
 import android.media.audiofx.NoiseSuppressor
-import android.util.Log
 import com.dugan.agent.domain.model.CallTransport
 import com.dugan.agent.domain.model.InputSource
 import kotlinx.coroutines.Dispatchers
@@ -110,7 +110,7 @@ class AudioCaptureManager @Inject constructor() {
             automaticGainControl = agc?.enabled == true,
             bufferSizeBytes = bufferSize,
         )
-        Log.i(TAG, "capture started: source=$source aec=${aec?.enabled} ns=${ns?.enabled}")
+        AgentLog.i(TAG, "capture started: source=$source aec=${aec?.enabled} ns=${ns?.enabled}")
 
         isCapturing = true
         recorder.startRecording()
@@ -145,7 +145,7 @@ class AudioCaptureManager @Inject constructor() {
             runCatching { ns?.release() }
             runCatching { agc?.release() }
             diagnostics = null
-            Log.i(TAG, "capture stopped")
+            AgentLog.i(TAG, "capture stopped")
         }
     }
 

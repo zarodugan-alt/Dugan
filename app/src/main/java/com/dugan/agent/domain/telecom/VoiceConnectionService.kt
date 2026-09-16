@@ -1,5 +1,6 @@
 package com.dugan.agent.domain.telecom
 
+import com.dugan.agent.util.AgentLog
 import android.net.Uri
 import android.os.Bundle
 import android.telecom.Connection
@@ -7,7 +8,6 @@ import android.telecom.ConnectionRequest
 import android.telecom.ConnectionService
 import android.telecom.DisconnectCause
 import android.telecom.PhoneAccountHandle
-import android.util.Log
 import dagger.hilt.android.AndroidEntryPoint
 import java.util.UUID
 import javax.inject.Inject
@@ -42,7 +42,7 @@ class VoiceConnectionService : ConnectionService() {
     ): Connection {
         val address = request?.address
         val callId = request.extras.callId() ?: UUID.randomUUID().toString()
-        Log.i(TAG, "onCreateIncomingConnection id=$callId address=$address")
+        AgentLog.i(TAG, "onCreateIncomingConnection id=$callId address=$address")
 
         return newConnection(callId, address).apply { markRinging() }
     }
@@ -53,7 +53,7 @@ class VoiceConnectionService : ConnectionService() {
     ): Connection {
         val address = request?.address
         val callId = request.extras.callId() ?: UUID.randomUUID().toString()
-        Log.i(TAG, "onCreateOutgoingConnection id=$callId address=$address")
+        AgentLog.i(TAG, "onCreateOutgoingConnection id=$callId address=$address")
 
         return newConnection(callId, address).apply { markDialing() }
     }
@@ -62,7 +62,7 @@ class VoiceConnectionService : ConnectionService() {
         phoneAccountHandle: PhoneAccountHandle?,
         request: ConnectionRequest?,
     ) {
-        Log.w(TAG, "incoming connection failed")
+        AgentLog.w(TAG, "incoming connection failed")
         super.onCreateIncomingConnectionFailed(phoneAccountHandle, request)
     }
 
@@ -70,7 +70,7 @@ class VoiceConnectionService : ConnectionService() {
         phoneAccountHandle: PhoneAccountHandle?,
         request: ConnectionRequest?,
     ) {
-        Log.w(TAG, "outgoing connection failed")
+        AgentLog.w(TAG, "outgoing connection failed")
         super.onCreateOutgoingConnectionFailed(phoneAccountHandle, request)
     }
 
@@ -91,7 +91,7 @@ class VoiceConnectionService : ConnectionService() {
         connection: VoIPConnection,
         state: VoIPConnection.State,
     ) {
-        Log.i(TAG, "connection $callId -> $state")
+        AgentLog.i(TAG, "connection $callId -> $state")
         if (state == VoIPConnection.State.Disconnected) {
             connections.remove(callId)
         }

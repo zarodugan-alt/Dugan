@@ -60,9 +60,13 @@ device talks to each provider directly.
 | **Google Gemini** | Reasoning / thinking | https://aistudio.google.com/apikey | ~15 RPM, ~1,500 requests/day |
 | **Unreal Speech** | Text-to-speech | https://unrealspeech.com | ~250K characters/month |
 
-Keys are validated structurally before any network call (Groq must start `gsk_`,
-Gemini `AIza` or `ya29.`), then verified with the smallest request each provider
-accepts. Keys are masked in every UI surface and never written to a log line.
+**Save and Test are separate buttons**, deliberately. Save is a local write to
+the encrypted vault, works offline, and costs nothing. Test additionally spends
+one request proving the key is live — the smallest call each provider accepts.
+Requiring a green Test before a key could be stored would make the app unusable
+offline and burn quota on every edit. Keys are validated structurally first
+(Groq must start `gsk_`, Gemini `AIza` or `ya29.`), masked in every UI surface,
+and never written to a log line.
 
 **Where they live:** `EncryptedSharedPreferences` (`byok_vault.xml`) under an
 AES256-GCM master key held by the Android Keystore. The file is excluded from
@@ -90,6 +94,25 @@ seed a debug build.
 
 The Gradle wrapper JAR is **not** committed. Run `gradle wrapper --gradle-version 8.9`
 once, then commit the generated `gradle/wrapper/gradle-wrapper.jar`.
+
+---
+
+## Continuous integration
+
+`.github/workflows/build.yml` runs on every push and pull request. Because the
+wrapper JAR is not committed, CI bootstraps Gradle with `gradle/actions/setup-gradle`
+(pinned to 8.9) rather than calling `./gradlew`.
+
+| Job | Needs | What it proves |
+|---|---|---|
+| `static-analysis` | — | Package paths, internal imports, manifest class references, version-catalog aliases, resource XML. Runs in seconds with no JVM. |
+| `unit-tests` | static-analysis | All 131 JVM unit tests across 19 test classes. |
+| `assemble-debug` | unit-tests | The debug APK builds, and the Gradle wrapper is regenerated and shipped alongside it as an artifact. |
+| `assemble-release` | unit-tests | R8 + resource shrinking succeed — this is the only job that proves `proguard-rules.pro` really keeps the serializers, Room DAOs, Telecom services and Hilt classes. Uploads `mapping.txt`. |
+| `assemble-firebase` | unit-tests | The opt-in `src/firebase` source set still compiles. It synthesises a throwaway `google-services.json` for both application ids, since that file is deliberately not committed. |
+
+Artifacts land under the run's **Artifacts** section: `dugan-debug-apk`,
+`dugan-release-apk`, `unit-test-report`.
 
 ---
 
@@ -241,6 +264,13 @@ That flag adds the `src/firebase` source set and applies the `google-services`
 plugin. Without it, `LocalOnlySignalingClient` is bound and the rest of the app
 is unaffected.
 
+Security rules ship in `database.rules.json` (deploy with
+`firebase deploy --only database`). They scope every read and write to the two
+participants' anonymous-auth uids, cap SDP blobs at 16 KB so the signalling
+channel cannot be used as free storage, and reject unknown fields. Note that RTDB
+rules cannot read a clock, so the 5-minute expiry for unanswered calls is
+enforced client-side and by a scheduled cleanup, not by the rules.
+
 The wiring is a Hilt multibinding: `SignalingModule` declares the set, and
 `FirebaseSignalingContributorModule` (only compiled under the flag) contributes
 into it.
@@ -267,6 +297,9 @@ Covered:
 | `PcmTest` | PCM round-trip, RMS, resampling, WAV header |
 | `VadAndEotTest` | energy VAD open/close, EOT heuristics and controller |
 | `ModelAndCallStateTest` | router heuristics, model catalogue integrity, SIM/VoIP capture gating |
+| `RetryTest` | backoff on 5xx/429/transport, and that 400/401 are **not** retried |
+| `AgentLogRedactTest` | key shapes are scrubbed from log output |
+| `KeyRowTest` | Save button enablement — the dirty check that keeps a stored key from looking unsaved |
 
 ### Static analysis
 
@@ -300,7 +333,9 @@ compiler. Expect to fix ordinary type errors on the first real build.
    cannot interrupt the agent while it speaks.
 5. **Layer 2 is NLMS, not AEC3.** Direct-path echo only; reverberation survives.
 6. **Free-tier limits apply:** Gemini ~15 RPM, Groq ~2,000 RPD, Unreal Speech
-   ~250K characters/month. TTS falls back to keyless Edge TTS on 429/402.
+   ~250K characters/month. TTS degrades in two steps: keyless Edge TTS on
+   429/402, then the platform's own `TextToSpeech` if the network is gone
+   entirely. The final tier always works but sounds markedly worse.
 7. **Echo cancellation quality is device-dependent.** Some OEMs report
    `AcousticEchoCanceler.isAvailable() == true` and do not apply it. Check
    Settings → Audio for what is actually live.
@@ -308,7 +343,22 @@ compiler. Expect to fix ordinary type errors on the first real build.
 9. **Default dialer role is required** for the full `InCallService` experience.
 10. **VoIP media transport is not included.** The signalling layer exchanges
     SDP/ICE; you need to attach your own WebRTC peer connection.
-11. **Not verified by a Gradle build.** See [Tests](#tests).
+11. **Platform TTS fallback needs a TTS engine installed.** Most devices ship
+    one; a stripped AOSP image may not.
+12. **Auto-answer is best-effort.** It waits `answerDelaySeconds` then checks the
+    call is still ringing; a caller who hangs up during the delay gets nothing.
+
+### Resilience behaviour
+
+- STT, LLM and TTS calls retry transport errors, 408, 429 and 5xx with
+  exponential backoff (250 ms → 4 s, capped). **401 and 400 are never retried** —
+  a bad key is a permanent answer and retrying it only burns quota.
+- Audio focus is requested before the agent speaks and released after. Transient
+  loss pauses the pipeline; regain resumes it, so the agent does not talk over a
+  navigation prompt or an incoming ring.
+- Everything logged goes through `AgentLog`, which redacts anything shaped like
+  an API key at the point of logging. Settings → About → Export Logs shares the
+  last 800 entries.
 
 ---
 

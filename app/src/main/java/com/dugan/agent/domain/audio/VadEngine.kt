@@ -164,3 +164,24 @@ class SileroVadEngine(
         }.getOrNull()
     }
 }
+
+/**
+ * Chooses the best VAD that is actually loaded.
+ *
+ * Mirrors [EotController]: the orchestrator asks for `active` and never needs to
+ * know whether the optional Silero asset was bundled.
+ */
+@Singleton
+class VadController @Inject constructor(
+    private val energy: EnergyVadEngine,
+) {
+    private var silero: SileroVadEngine? = null
+
+    fun attach(detector: SileroVadEngine?) {
+        silero = detector
+    }
+
+    val active: VadEngine get() = silero ?: energy
+
+    val usingOnDeviceModel: Boolean get() = silero != null
+}

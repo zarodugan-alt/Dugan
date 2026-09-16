@@ -179,7 +179,12 @@ private fun KeysStep(
             KeyField(
                 provider = provider,
                 value = keys[provider.id].orEmpty(),
+                storedMask = null,
+                // Onboarding requires a green Test to continue, so any non-blank
+                // draft is by definition a change from the empty vault.
+                dirty = keys[provider.id].orEmpty().isNotBlank(),
                 onValueChange = { onKeyChange(provider, it) },
+                onSave = { onTest(provider) },
                 onTest = { onTest(provider) },
                 testResult = results[provider.id] ?: KeyTestResult.Untested,
             )

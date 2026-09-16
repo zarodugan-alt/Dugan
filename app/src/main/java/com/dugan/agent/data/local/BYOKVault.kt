@@ -1,7 +1,7 @@
 package com.dugan.agent.data.local
 
+import com.dugan.agent.util.AgentLog
 import android.content.Context
-import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.dugan.agent.domain.model.ApiProvider
@@ -65,7 +65,7 @@ class EncryptedKeyVault @Inject constructor(
     }.recoverCatching { failure ->
         // Keystore corruption (common after a restore or an OTA) leaves the vault
         // unreadable. Drop and recreate rather than crash-looping the app.
-        Log.w(TAG, "vault unreadable, recreating: ${failure.javaClass.simpleName}")
+        AgentLog.w(TAG, "vault unreadable, recreating: ${failure.javaClass.simpleName}")
         context.deleteSharedPreferences(FILE_NAME)
         val masterKey = MasterKey.Builder(context)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)

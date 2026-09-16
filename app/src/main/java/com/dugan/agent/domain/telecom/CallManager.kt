@@ -1,11 +1,11 @@
 package com.dugan.agent.domain.telecom
 
+import com.dugan.agent.util.AgentLog
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
 import android.net.Uri
 import android.telecom.TelecomManager
-import android.util.Log
 import com.dugan.agent.data.repository.ContactRepository
 import com.dugan.agent.domain.command.VoiceCommandHandler
 import com.dugan.agent.domain.command.VoiceCommandParser
@@ -74,7 +74,7 @@ class CallManager @Inject constructor(
             }
             context.startActivity(intent)
         }.onFailure {
-            Log.w(TAG, "placeCall failed: ${it.message}")
+            AgentLog.w(TAG, "placeCall failed: ${it.message}")
             // Fall back to the system dialer, which never needs CALL_PHONE.
             runCatching {
                 context.startActivity(
@@ -94,7 +94,7 @@ class CallManager @Inject constructor(
         runCatching {
             val telecom = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
             telecom.addNewOutgoingCall(uri, extras)
-        }.onFailure { Log.w(TAG, "placeVoipCall failed: ${it.message}") }
+        }.onFailure { AgentLog.w(TAG, "placeVoipCall failed: ${it.message}") }
     }
 
     fun answer(callId: String?) {
@@ -145,11 +145,13 @@ class CallManager @Inject constructor(
             when {
                 parser.isAffirmative(transcript) -> {
                     pendingDial = null
+                    orchestrator.speak("Dialling now.")
                     placeCall(proposed)
                     return true
                 }
                 parser.isNegative(transcript) -> {
                     pendingDial = null
+                    orchestrator.speak("Okay, cancelled.")
                     return true
                 }
             }
@@ -157,9 +159,10 @@ class CallManager @Inject constructor(
 
         val intent = parser.parse(transcript) ?: return false
 
-        // A spoken number dials directly.
+        // A spoken number dials directly -- no contact to mis-resolve.
         parser.parseNumber(intent.contactQuery)?.let { digits ->
             pendingDial = digits
+            orchestrator.speak("Dialling $digits. Is that right?")
             return true
         }
 
@@ -170,11 +173,16 @@ class CallManager @Inject constructor(
             }
 
         if (contact == null) {
-            Log.i(TAG, "no contact matched '${intent.contactQuery}'")
-            return false
+            AgentLog.i(TAG, "no contact matched '${intent.contactQuery}'")
+            orchestrator.speak("I could not find ${intent.contactQuery} in your contacts.")
+            // Return true so the LLM does not also answer; the prompt was the reply.
+            return true
         }
 
         pendingDial = contact.number
+        // Confirm out loud before dialling. A dial is a side effect, so it is never
+        // fired on the first pass -- only after an explicit affirmative.
+        orchestrator.speak("Calling ${contact.displayName}. Is that right?")
         return true
     }
 

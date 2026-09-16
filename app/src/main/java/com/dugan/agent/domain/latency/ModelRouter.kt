@@ -1,6 +1,6 @@
 package com.dugan.agent.domain.latency
 
-import android.util.Log
+import com.dugan.agent.util.AgentLog
 import com.dugan.agent.data.api.AgentLlm
 import com.dugan.agent.data.api.ChatMessage
 import com.dugan.agent.domain.model.AgentModel
@@ -60,7 +60,7 @@ class ModelRouter @Inject constructor(
             ).trim().uppercase()
             if (verdict.startsWith("SIMPLE")) small else preferred
         }.onFailure {
-            Log.w(TAG, "router fell back to preferred model: ${it.javaClass.simpleName}")
+            AgentLog.w(TAG, "router fell back to preferred model: ${it.javaClass.simpleName}")
         }.getOrDefault(preferred)
     }
 

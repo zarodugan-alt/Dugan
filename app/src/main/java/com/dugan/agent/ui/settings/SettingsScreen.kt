@@ -44,6 +44,7 @@ import com.dugan.agent.domain.model.InputSource
 import com.dugan.agent.domain.model.KeyTestResult
 import com.dugan.agent.domain.model.ListeningMode
 import com.dugan.agent.ui.components.KeyField
+import com.dugan.agent.util.AgentLog
 import com.dugan.agent.ui.components.SectionCard
 import com.dugan.agent.ui.components.SettingsRow
 
@@ -54,10 +55,11 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
-    val drafts by viewModel.drafts.collectAsStateWithLifecycle()
-    val testResults by viewModel.testResults.collectAsStateWithLifecycle()
+    val rows by viewModel.rows.collectAsStateWithLifecycle()
     val aec by viewModel.aecStatus.collectAsStateWithLifecycle()
     var showResetDialog by remember { mutableStateOf(false) }
+    var showLicenses by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     Scaffold(
         topBar = {
@@ -88,21 +90,25 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 ApiProvider.entries.forEach { provider ->
+                    val row = rows[provider.id] ?: KeyRow()
                     KeyField(
                         provider = provider,
-                        value = drafts[provider.id].orEmpty(),
+                        value = row.draft,
+                        storedMask = row.storedMask,
+                        dirty = row.isDirty,
                         onValueChange = { viewModel.onDraftChange(provider, it) },
+                        onSave = { viewModel.saveKey(provider) },
                         onTest = { viewModel.testKey(provider) },
-                        testResult = testResults[provider.id] ?: KeyTestResult.Untested,
+                        onClear = { viewModel.clearKey(provider) },
+                        testResult = row.result,
                     )
-                    if (viewModel.isConfigured(provider) && drafts[provider.id].isNullOrBlank()) {
-                        Text(
-                            "Saved: ${viewModel.storedMask(provider)}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
-                    }
                 }
+                Text(
+                    "Save writes to the encrypted vault on this device and works offline. " +
+                        "Test also spends one request to prove the key is live.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
             }
 
             SectionCard(title = "Default Models", icon = "🧠") {
@@ -249,8 +255,44 @@ fun SettingsScreen(
 
             SectionCard(title = "About", icon = "ℹ️") {
                 SettingsRow(label = "Version", supporting = null) { Text("1.0.0") }
-                SettingsRow(label = "Default dialer", supporting = null) {
+                SettingsRow(
+                    label = "Default dialer",
+                    supporting = if (viewModel.isDefaultDialer) {
+                        "Full in-call management is available."
+                    } else {
+                        "Without this role Dugan cannot draw the system in-call screen or manage VoIP calls."
+                    },
+                ) {
                     Text(if (viewModel.isDefaultDialer) "Yes" else "No")
+                }
+                if (!viewModel.isDefaultDialer) {
+                    val roleIntent = remember { viewModel.requestDialerRoleIntent() }
+                    Button(
+                        onClick = { roleIntent?.let { context.startActivity(it) } },
+                        enabled = roleIntent != null,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Set as default dialer")
+                    }
+                }
+                TextButton(
+                    onClick = {
+                        val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(android.content.Intent.EXTRA_SUBJECT, "Dugan diagnostic log")
+                            putExtra(android.content.Intent.EXTRA_TEXT, AgentLog.dump())
+                        }
+                        context.startActivity(android.content.Intent.createChooser(send, "Export logs"))
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Export Logs")
+                }
+                TextButton(
+                    onClick = { showLicenses = true },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Licenses")
                 }
                 Button(onClick = { showResetDialog = true }, modifier = Modifier.fillMaxWidth()) {
                     Text("Reset All Keys")
@@ -260,6 +302,27 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+
+    if (showLicenses) {
+        AlertDialog(
+            onDismissRequest = { showLicenses = false },
+            title = { Text("Open-source licenses") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    LICENSES.forEach { (name, licence) ->
+                        Text(name, style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            licence,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showLicenses = false }) { Text("Close") } },
+        )
     }
 
     if (showResetDialog) {
@@ -376,3 +439,24 @@ private fun InputSourceDropdown(selected: InputSource, onSelect: (InputSource) -
 
 @Suppress("unused")
 private val UnusedSpacer = Spacer(Modifier.height(0.dp))
+
+/**
+ * Components this app builds on.
+ *
+ * Hand-maintained rather than generated by the OSS Licenses plugin: that plugin
+ * needs a Gradle plugin plus a generated activity, and for a personal build a
+ * readable list in the About screen is worth more than a machine-generated one.
+ */
+private val LICENSES = listOf(
+    "Jetpack Compose / Material 3" to "Apache-2.0 — The Android Open Source Project",
+    "AndroidX (Room, DataStore, Lifecycle, Navigation, Security-Crypto)" to "Apache-2.0 — The Android Open Source Project",
+    "Kotlin Coroutines & kotlinx.serialization" to "Apache-2.0 — JetBrains",
+    "OkHttp" to "Apache-2.0 — Square, Inc.",
+    "Dagger Hilt" to "Apache-2.0 — The Dagger Authors",
+    "Accompanist Permissions" to "Apache-2.0 — Google",
+    "Android Telecom framework" to "Apache-2.0 — The Android Open Source Project",
+    "Firebase Realtime Database (optional, -Pdugan.firebase=true)" to "Apache-2.0 — Google",
+    "Silero VAD v5 (optional asset, not bundled)" to "MIT — Silero",
+    "Smart Turn v3.2 (optional asset, not bundled)" to "BSD-2-Clause — Pipecat",
+    "WebRTC AEC3 (referenced design, not bundled)" to "BSD-3-Clause — The WebRTC Authors",
+)

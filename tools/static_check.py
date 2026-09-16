@@ -70,6 +70,9 @@ KOTLIN_BUILTINS = {
     "IOException", "InterruptedException", "CancellationException",
     "Charsets", "Math", "Class", "System", "Runtime", "Thread", "Object", "Void",
     "AssetManager", "Process", "StrictMode", "Looper", "Handler", "Bundle",
+    # kotlin.* default imports -- always in scope, never imported explicitly.
+    "AnnotationRetention", "AnnotationTarget", "JvmSuppressWildcards", "JvmStatic",
+    "Synchronized", "ClosedFloatingPointRange", "Comparable", "Lazy", "Nothing",
 }
 
 errors: list[str] = []
@@ -97,6 +100,13 @@ def strip_code(src: str) -> str:
             end = n if end == -1 else end + 3
             out.append(re.sub(r"[^\n]", " ", src[i:end]))
             i = end
+        elif c == "`":
+            # Kotlin escaped identifier (`a test name with spaces`). Blank the body
+            # so the words inside are not mistaken for type references.
+            j = src.find("`", i + 1)
+            j = i + 1 if j == -1 else j + 1
+            out.append("`" + " " * max(0, j - i - 2) + "`")
+            i = j
         elif c in ('"', "'"):
             j = i + 1
             while j < n:
@@ -121,6 +131,8 @@ DECL_RE = re.compile(
     r"^\s*(?:(?:public|internal|private|protected|abstract|open|sealed|data|value|inner|"
     r"enum|annotation|inline|external|suspend|actual|expect|fun|operator|infix|const|lateinit|tailrec|override|companion)\s+)*"
     r"(?P<kind>class|object|interface|fun|val|var|typealias)\s+"
+    # Optional generic parameter list, e.g. `suspend fun <T> withRetry(...)`.
+    r"(?:<[^<>]*(?:<[^<>]*>)?[^<>]*>\s+)?"
     # `Receiver.name` for extension members -- the member name is what matters.
     r"(?P<name>(?:`?[A-Za-z_]\w*`?\.)*`?[A-Za-z_]\w*`?)",
     re.MULTILINE,

@@ -1,6 +1,6 @@
 package com.dugan.agent.domain.echo
 
-import android.util.Log
+import com.dugan.agent.util.AgentLog
 import com.dugan.agent.data.local.TtsCache
 import com.dugan.agent.domain.audio.AudioFrame
 import com.dugan.agent.domain.audio.AudioPlaybackEngine
@@ -48,7 +48,7 @@ class EchoDefenseEngine @Inject constructor(
     init {
         // Silence the unused-parameter warning without dropping the dependency:
         // the cache is warmed with the same phrases we defend against.
-        Log.d(TAG, "echo defence ready, warm phrases=${TtsCache.WarmPhrases.size}")
+        AgentLog.d(TAG, "echo defence ready, warm phrases=${TtsCache.WarmPhrases.size}")
     }
 
     fun configure(newSettings: DuganSettings) {

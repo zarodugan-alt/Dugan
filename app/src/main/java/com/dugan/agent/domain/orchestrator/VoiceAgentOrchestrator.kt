@@ -1,6 +1,6 @@
 package com.dugan.agent.domain.orchestrator
 
-import android.util.Log
+import com.dugan.agent.util.AgentLog
 import com.dugan.agent.data.api.AgentLlm
 import com.dugan.agent.data.api.AgentTts
 import com.dugan.agent.data.api.ApiException
@@ -14,7 +14,8 @@ import com.dugan.agent.domain.audio.AecController
 import com.dugan.agent.domain.audio.AudioCaptureManager
 import com.dugan.agent.domain.audio.AudioFrame
 import com.dugan.agent.domain.audio.AudioPlaybackEngine
-import com.dugan.agent.domain.audio.EnergyVadEngine
+import com.dugan.agent.domain.audio.AudioFocusController
+import com.dugan.agent.domain.audio.VadController
 import com.dugan.agent.domain.audio.EotController
 import com.dugan.agent.domain.audio.Pcm
 import com.dugan.agent.domain.audio.SoftwareAec
@@ -37,6 +38,7 @@ import com.dugan.agent.domain.model.ListeningMode
 import com.dugan.agent.domain.model.Speaker
 import com.dugan.agent.domain.model.ThinkingLevel
 import com.dugan.agent.domain.model.TranscriptEntry
+import com.dugan.agent.util.withRetry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -75,7 +77,7 @@ data class SpeculativeTurn(val partial: String, val response: String)
 class VoiceAgentOrchestrator @Inject constructor(
     private val capture: AudioCaptureManager,
     private val playback: AudioPlaybackEngine,
-    private val vad: EnergyVadEngine,
+    private val vadController: VadController,
     private val eot: EotController,
     private val aecController: AecController,
     private val softwareAec: SoftwareAec,
@@ -92,6 +94,7 @@ class VoiceAgentOrchestrator @Inject constructor(
     private val speculation: SpeculativeExecutor,
     private val fuzzy: FuzzyMatcher,
     private val warmup: ConnectionWarmup,
+    private val audioFocus: AudioFocusController,
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -129,6 +132,11 @@ class VoiceAgentOrchestrator @Inject constructor(
             runCatching { history.observeSession().collect { _transcript.value = it } }
         }
         playback.onLevel = { level -> _state.update { it.copy(outputLevel = level) } }
+        audioFocus.onTransientLoss = { dispatch(AgentCommand.Pause) }
+        audioFocus.onRegain = {
+            // Only resume if the user paused us by losing focus, not deliberately.
+            if (_state.value.phase == AgentPhase.Paused) dispatch(AgentCommand.Continue)
+        }
         warmup.warmAll()
     }
 
@@ -173,6 +181,7 @@ class VoiceAgentOrchestrator @Inject constructor(
             AgentCommand.Start, AgentCommand.Continue -> beginListening()
             AgentCommand.Stop -> {
                 playback.stop()
+                audioFocus.abandon()
                 turnJob?.cancel()
                 speculation.reset()
                 utterance.clear()
@@ -181,6 +190,7 @@ class VoiceAgentOrchestrator @Inject constructor(
             AgentCommand.Pause -> {
                 captureJob?.cancel()
                 playback.stop()
+                audioFocus.abandon()
             }
             AgentCommand.Reset -> {
                 playback.stop()
@@ -198,6 +208,25 @@ class VoiceAgentOrchestrator @Inject constructor(
                 resetTurnTracking()
                 beginListening()
             }
+        }
+    }
+
+    /**
+     * Speaks a fixed string through the normal TTS chain.
+     *
+     * Used by the Telecom layer for prompts that must not go through the LLM --
+     * a dial confirmation is a side-effecting action and is never speculated on.
+     */
+    fun speak(text: String) {
+        if (text.isBlank()) return
+        scope.launch {
+            runCatching {
+                echo.recordAgentSpeech(text)
+                speakSentence(text)
+                playback.drainQuietly()
+                audioFocus.abandon()
+                _state.update { it.copy(phase = AgentPhase.Listening, agentSpeaking = false) }
+            }.onFailure { onTurnFailure(it) }
         }
     }
 
@@ -236,7 +265,7 @@ class VoiceAgentOrchestrator @Inject constructor(
 
     private fun beginListening() {
         captureJob?.cancel()
-        vad.reset()
+        vadController.active.reset()
         softwareAec.reset()
         playback.clearOutputLog()
         speculation.reset()
@@ -260,7 +289,7 @@ class VoiceAgentOrchestrator @Inject constructor(
             runCatching {
                 capture.capture(config).collect { frame -> onFrame(frame) }
             }.onFailure {
-                Log.w(TAG, "capture failed: ${it.javaClass.simpleName}: ${it.message}")
+                AgentLog.w(TAG, "capture failed: ${it.javaClass.simpleName}: ${it.message}")
                 _events.tryEmit(AgentEvent.AudioUnavailable(it.message ?: "Microphone unavailable"))
                 _state.update { s -> s.copy(phase = AgentPhase.Idle) }
             }
@@ -291,7 +320,7 @@ class VoiceAgentOrchestrator @Inject constructor(
             return
         }
 
-        val decision = vad.process(working, settings.vadSensitivity)
+        val decision = vadController.active.process(working, settings.vadSensitivity)
 
         when (_state.value.listeningMode) {
             ListeningMode.PushToTalk ->
@@ -358,13 +387,21 @@ class VoiceAgentOrchestrator @Inject constructor(
                 _state.update { it.copy(phase = AgentPhase.Listening) }
                 return
             }
-            chunkedStt.transcribe(
-                client = sttClient,
-                model = settings.sttModel,
-                pcm = pcm,
-                sampleRate = CAPTURE_RATE,
-            ) { partial ->
-                _state.update { s -> s.copy(partialTranscript = partial) }
+            withRetry("stt", attempts = 3) {
+                if (settings.streamingStt) {
+                    chunkedStt.transcribe(
+                        client = sttClient,
+                        model = settings.sttModel,
+                        pcm = pcm,
+                        sampleRate = CAPTURE_RATE,
+                    ) { partial ->
+                        _state.update { s -> s.copy(partialTranscript = partial) }
+                    }
+                } else {
+                    // Streaming off: one request for the whole utterance. Slower to
+                    // first partial but avoids any chance of an overlap seam.
+                    sttClient.transcribe(settings.sttModel, pcm, CAPTURE_RATE)
+                }
             }.text.trim()
         }
 
@@ -384,7 +421,7 @@ class VoiceAgentOrchestrator @Inject constructor(
         if (!fromText) {
             val verdict = echo.classifyTranscript(spoken)
             if (verdict.verdict == EchoVerdict.Echo) {
-                Log.i(TAG, "dropped echo via ${verdict.layer} (confidence ${verdict.confidence})")
+                AgentLog.i(TAG, "dropped echo via ${verdict.layer} (confidence ${verdict.confidence})")
                 _events.tryEmit(AgentEvent.EchoSuppressed(spoken))
                 _state.update { it.copy(phase = AgentPhase.Listening, partialTranscript = "") }
                 return
@@ -398,8 +435,7 @@ class VoiceAgentOrchestrator @Inject constructor(
         val preferred = _state.value.modelOverride ?: settings.thinkingModel
         val model = router.route(spoken, preferred, settings.modelRouting)
         val thinking = _state.value.thinkingLevelOverride ?: settings.thinkingLevel
-        val context = history.contextWindow()
-        val messages = context.map { ChatMessage(it.speaker.role(), it.text) } + ChatMessage("user", spoken)
+        val messages = buildMessages(spoken)
 
         // 5. Reuse a speculative completion when the final transcript agrees.
         val reused = takeSpeculationIfValid(spoken)
@@ -462,6 +498,7 @@ class VoiceAgentOrchestrator @Inject constructor(
         }
 
         playback.drainQuietly()
+        audioFocus.abandon()
         _state.update {
             it.copy(
                 phase = AgentPhase.Listening,
@@ -471,6 +508,19 @@ class VoiceAgentOrchestrator @Inject constructor(
             )
         }
         resetTurnTracking()
+    }
+
+    /**
+     * Message list for a turn.
+     *
+     * With prefix caching on, prior turns are sent as a stable leading block: the
+     * provider can reuse its KV cache across turns, which is most of the TTFT win.
+     * With it off, each request is stateless -- lower latency on the first turn of
+     * a call, no memory of earlier ones.
+     */
+    private suspend fun buildMessages(userText: String): List<ChatMessage> {
+        val history = if (settings.prefixCaching) history.contextWindow() else emptyList()
+        return history.map { ChatMessage(it.speaker.role(), it.text) } + ChatMessage("user", userText)
     }
 
     /**
@@ -493,8 +543,7 @@ class VoiceAgentOrchestrator @Inject constructor(
         ) {
             return
         }
-        val context = history.contextWindow()
-        val messages = context.map { ChatMessage(it.speaker.role(), it.text) } + ChatMessage("user", partial)
+        val messages = buildMessages(partial)
         speculation.speculate(scope) {
             val builder = StringBuilder()
             llm.stream(
@@ -517,7 +566,7 @@ class VoiceAgentOrchestrator @Inject constructor(
         speculation.reset()
         val agreement = fuzzy.similarity(candidate.partial, finalTranscript)
         return if (agreement >= SPECULATION_AGREEMENT) {
-            Log.i(TAG, "reused speculative completion (agreement $agreement)")
+            AgentLog.i(TAG, "reused speculative completion (agreement $agreement)")
             candidate.response.ifBlank { null }
         } else {
             speculation.discard()
@@ -533,6 +582,7 @@ class VoiceAgentOrchestrator @Inject constructor(
             _events.tryEmit(AgentEvent.AudioUnavailable("No audio output available"))
             return
         }
+        audioFocus.request()
 
         val cacheKey = ttsCache.keyFor(trimmed, settings)
         val cached = ttsCache.get(cacheKey)
@@ -570,7 +620,7 @@ class VoiceAgentOrchestrator @Inject constructor(
     }
 
     private fun onTurnFailure(t: Throwable) {
-        Log.w(TAG, "turn failed: ${t.javaClass.simpleName}: ${t.message}")
+        AgentLog.w(TAG, "turn failed: ${t.javaClass.simpleName}: ${t.message}")
         val message = when (t) {
             is ApiException -> when {
                 t.isAuth -> "That API key was rejected. Check it in Settings."

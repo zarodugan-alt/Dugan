@@ -1,10 +1,10 @@
 package com.dugan.agent.domain.telecom
 
+import com.dugan.agent.util.AgentLog
 import android.content.Context
 import android.net.Uri
 import android.telecom.Connection
 import android.telecom.TelecomManager
-import android.util.Log
 
 /**
  * A self-managed VoIP connection.
@@ -40,21 +40,21 @@ class VoIPConnection(
     }
 
     override fun onAnswer() {
-        Log.i(TAG, "onAnswer")
+        AgentLog.i(TAG, "onAnswer")
         setAudioModeIsVoip(true)
         setActive()
         onStateChange(this, State.Active)
     }
 
     override fun onReject() {
-        Log.i(TAG, "onReject")
+        AgentLog.i(TAG, "onReject")
         setDisconnected(android.telecom.DisconnectCause(android.telecom.DisconnectCause.REJECTED))
         onStateChange(this, State.Disconnected)
         destroy()
     }
 
     override fun onDisconnect() {
-        Log.i(TAG, "onDisconnect")
+        AgentLog.i(TAG, "onDisconnect")
         setDisconnected(android.telecom.DisconnectCause(android.telecom.DisconnectCause.LOCAL))
         onStateChange(this, State.Disconnected)
         destroy()

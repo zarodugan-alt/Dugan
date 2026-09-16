@@ -1,6 +1,6 @@
 package com.dugan.agent.domain.echo
 
-import android.util.Log
+import com.dugan.agent.util.AgentLog
 import com.dugan.agent.data.api.AgentLlm
 import com.dugan.agent.data.api.ChatMessage
 import com.dugan.agent.domain.model.ModelCatalog
@@ -39,7 +39,7 @@ class LlmEchoVerifier @Inject constructor(
             )
             reply.trim().uppercase().startsWith("ECHO")
         }.onFailure {
-            Log.w(TAG, "echo verifier failed: ${it.javaClass.simpleName}")
+            AgentLog.w(TAG, "echo verifier failed: ${it.javaClass.simpleName}")
         }.getOrDefault(false)
     }
 

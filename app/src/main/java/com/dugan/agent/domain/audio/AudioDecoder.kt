@@ -1,10 +1,10 @@
 package com.dugan.agent.domain.audio
 
+import com.dugan.agent.util.AgentLog
 import android.media.MediaCodec
 import android.media.MediaDataSource
 import android.media.MediaExtractor
 import android.media.MediaFormat
-import android.util.Log
 import java.nio.ByteBuffer
 
 /**
@@ -93,7 +93,7 @@ object AudioDecoder {
             val stereo = if (channels >= 2) downmix(pcm) else pcm
             Decoded(sampleRate, 1, stereo)
         } catch (t: Throwable) {
-            Log.w(TAG, "decode failed: ${t.javaClass.simpleName}: ${t.message}")
+            AgentLog.w(TAG, "decode failed: ${t.javaClass.simpleName}: ${t.message}")
             null
         } finally {
             runCatching { codec?.stop() }

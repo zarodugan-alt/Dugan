@@ -1,10 +1,12 @@
 package com.dugan.agent
 
+import com.dugan.agent.util.AgentLog
 import android.app.Application
 import com.dugan.agent.data.local.TtsCache
 import com.dugan.agent.domain.audio.SileroVadEngine
 import com.dugan.agent.domain.audio.SmartTurnEotDetector
 import com.dugan.agent.domain.audio.EotController
+import com.dugan.agent.domain.audio.VadController
 import com.dugan.agent.domain.model.DuganSettings
 import com.dugan.agent.domain.telecom.PhoneAccountRegistrar
 import dagger.hilt.android.HiltAndroidApp
@@ -33,6 +35,9 @@ class DuganApplication : Application() {
     @Inject
     lateinit var eotController: EotController
 
+    @Inject
+    lateinit var vadController: VadController
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override fun onCreate() {
@@ -44,7 +49,8 @@ class DuganApplication : Application() {
             val silero = SileroVadEngine.loadOrNull(assets)
             val smartTurn = SmartTurnEotDetector.loadOrNull(assets)
             eotController.attach(smartTurn)
-            android.util.Log.i(
+            vadController.attach(silero)
+            android.util.AgentLog.i(
                 "Dugan",
                 "models: silero=${silero != null} smartTurn=${smartTurn != null}",
             )

@@ -1,10 +1,10 @@
 package com.dugan.agent.domain.audio
 
+import com.dugan.agent.util.AgentLog
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
-import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -83,7 +83,7 @@ class AudioPlaybackEngine @Inject constructor() {
             AudioFormat.ENCODING_PCM_16BIT,
         )
         if (minBuffer <= 0) {
-            Log.w(TAG, "AudioTrack unavailable for rate=$rate (min=$minBuffer)")
+            AgentLog.w(TAG, "AudioTrack unavailable for rate=$rate (min=$minBuffer)")
             return false
         }
 
@@ -111,7 +111,7 @@ class AudioPlaybackEngine @Inject constructor() {
                 .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
                 .build()
         }.getOrElse {
-            Log.w(TAG, "AudioTrack init failed: ${it.javaClass.simpleName}: ${it.message}")
+            AgentLog.w(TAG, "AudioTrack init failed: ${it.javaClass.simpleName}: ${it.message}")
             return false
         }
 

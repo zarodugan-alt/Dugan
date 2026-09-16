@@ -15,6 +15,7 @@ import com.dugan.agent.domain.model.ApiProvider
 import com.dugan.agent.domain.model.DuganSettings
 import com.dugan.agent.domain.model.KeyTestResult
 import com.dugan.agent.domain.model.ModelCatalog
+import com.dugan.agent.domain.model.maskKey
 import com.dugan.agent.domain.orchestrator.VoiceAgentOrchestrator
 import com.dugan.agent.domain.telecom.PhoneAccountRegistrar
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -22,10 +23,26 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+/** Per-provider key state for one [com.dugan.agent.ui.components.KeyField]. */
+data class KeyRow(
+    val draft: String = "",
+    val storedMask: String? = null,
+    val result: KeyTestResult = KeyTestResult.Untested,
+) {
+    /** Save is enabled only when the draft is a real change from what is stored. */
+    val isDirty: Boolean get() = draft.isNotBlank() && draft.trim() != storedMask
+
+    companion object {
+        fun emptyRows(): Map<String, KeyRow> =
+            ApiProvider.entries.associate { it.id to KeyRow() }
+    }
+}
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -43,67 +60,119 @@ class SettingsViewModel @Inject constructor(
     val settings: StateFlow<DuganSettings> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DuganSettings())
 
-    /** Draft key text per provider, kept out of the vault until saved. */
-    private val _drafts = MutableStateFlow(Map<String, String>())
-    val drafts: StateFlow<Map<String, String>> = _drafts.asStateFlow()
-
-    private val _testResults = MutableStateFlow(Map<String, KeyTestResult>())
-    val testResults: StateFlow<Map<String, KeyTestResult>> = _testResults.asStateFlow()
+    private val _rows = MutableStateFlow(KeyRow.emptyRows())
+    val rows: StateFlow<Map<String, KeyRow>> = _rows.asStateFlow()
 
     private val _aecStatus = MutableStateFlow(AecStatus())
     val aecStatus: StateFlow<AecStatus> = _aecStatus.asStateFlow()
 
+    /** Live count so the Agent screen banner can react without polling. */
+    val configuredCount: StateFlow<Int> = keyRepository.keys
+        .map { it.size }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
     val isDefaultDialer: Boolean get() = registrar.isDefaultDialer()
+
+    /** Intent for the system role prompt, or null when the role is already held. */
+    fun requestDialerRoleIntent(): android.content.Intent? = registrar.requestDefaultDialerIntent()
 
     init {
         refreshAecStatus()
-        // Seed drafts with masked placeholders so the fields are not blank for a
-        // user who has already configured keys.
-        _drafts.value = ApiProvider.entries.associate { it.id to "" }
+        syncStoredMasks()
     }
 
-    fun draftFor(provider: ApiProvider): String = _drafts.value[provider.id].orEmpty()
+    private fun syncStoredMasks() {
+        _rows.update { current ->
+            current.mapValues { (id, row) ->
+                val provider = ApiProvider.fromId(id) ?: return@mapValues row
+                row.copy(storedMask = vault.read(provider)?.let(::maskKey))
+            }
+        }
+    }
 
-    fun storedMask(provider: ApiProvider): String = keyRepository.displayKey(provider)
-
-    fun isConfigured(provider: ApiProvider): Boolean = keyRepository.isConfigured(provider)
+    fun row(provider: ApiProvider): KeyRow =
+        _rows.value[provider.id] ?: KeyRow()
 
     fun onDraftChange(provider: ApiProvider, value: String) {
-        _drafts.update { it + (provider.id to value) }
-        _testResults.update { it + (provider.id to KeyTestResult.Untested) }
+        _rows.update { it + (provider.id to row(provider).copy(draft = value, result = KeyTestResult.Untested)) }
     }
 
     /**
-     * Smallest valid request per provider. A valid key returns 200; an invalid one
-     * returns 401, which is what the badge shows.
+     * Local-only write to the encrypted vault. Works offline, spends no quota, and
+     * is the only thing that has to succeed for the agent to run.
+     */
+    fun saveKey(provider: ApiProvider) {
+        val draft = row(provider).draft.trim()
+        val problem = keyRepository.validate(provider, draft)
+        if (problem != null) {
+            _rows.update {
+                it + (provider.id to row(provider).copy(result = KeyTestResult.Invalid(problem)))
+            }
+            return
+        }
+        if (keyRepository.save(provider, draft)) {
+            _rows.update {
+                it + (
+                    provider.id to row(provider).copy(
+                        // Clearing the draft puts the field back to its masked state
+                        // and stops it looking like there is an unsaved change.
+                        draft = "",
+                        storedMask = maskKey(draft),
+                        result = KeyTestResult.Untested,
+                    )
+                    )
+            }
+        }
+    }
+
+    fun clearKey(provider: ApiProvider) {
+        keyRepository.clear(provider)
+        ttsCache.clear()
+        _rows.update {
+            it + (provider.id to KeyRow(storedMask = null, result = KeyTestResult.Untested))
+        }
+    }
+
+    /**
+     * Smallest valid request per provider. Saves first so the client under test
+     * reads the candidate key from the vault rather than the previous one.
      */
     fun testKey(provider: ApiProvider) {
-        val key = _drafts.value[provider.id].orEmpty().ifBlank { vault.read(provider).orEmpty() }
-        if (key.isBlank()) {
-            _testResults.update { it + (provider.id to KeyTestResult.Invalid("No key to test")) }
+        val draft = row(provider).draft.trim().ifBlank { vault.read(provider).orEmpty() }
+        if (draft.isBlank()) {
+            _rows.update {
+                it + (provider.id to row(provider).copy(result = KeyTestResult.Invalid("No key to test")))
+            }
             return
         }
-        _testResults.update { it + (provider.id to KeyTestResult.Testing) }
+        val problem = keyRepository.validate(provider, draft)
+        if (problem != null) {
+            _rows.update {
+                it + (provider.id to row(provider).copy(result = KeyTestResult.Invalid(problem)))
+            }
+            return
+        }
 
-        // Save first so the client picks the key up from the vault.
-        val saved = keyRepository.save(provider, key)
-        if (!saved) {
-            val reason = keyRepository.validate(provider, key) ?: "Key rejected"
-            _testResults.update { it + (provider.id to KeyTestResult.Invalid(reason)) }
-            return
-        }
+        _rows.update { it + (provider.id to row(provider).copy(result = KeyTestResult.Testing)) }
+        keyRepository.save(provider, draft)
 
         viewModelScope.launch {
-            val result = when (provider) {
+            val outcome = when (provider) {
                 ApiProvider.Groq -> stt.ping(ModelCatalog.DefaultStt)
                 ApiProvider.Gemini -> llm.ping(ModelCatalog.DefaultThinking)
                 ApiProvider.UnrealSpeech -> tts.ping(ModelCatalog.DefaultTts)
             }
-            _testResults.update {
+            _rows.update {
                 it + (
-                    provider.id to result.fold(
-                        onSuccess = { KeyTestResult.Valid("Reachable") },
-                        onFailure = { t -> KeyTestResult.Invalid(t.message?.take(160) ?: "Request failed") },
+                    provider.id to row(provider).copy(
+                        draft = "",
+                        storedMask = maskKey(draft),
+                        result = outcome.fold(
+                            onSuccess = { KeyTestResult.Valid("Reachable") },
+                            onFailure = { t ->
+                                KeyTestResult.Invalid(t.message?.take(160) ?: "Request failed")
+                            },
+                        ),
                     )
                     )
             }
@@ -118,9 +187,8 @@ class SettingsViewModel @Inject constructor(
 
     fun resetAllKeys() {
         keyRepository.clearAll()
-        _drafts.value = ApiProvider.entries.associate { it.id to "" }
-        _testResults.value = emptyMap()
         ttsCache.clear()
+        _rows.value = KeyRow.emptyRows()
     }
 
     fun clearCache() {

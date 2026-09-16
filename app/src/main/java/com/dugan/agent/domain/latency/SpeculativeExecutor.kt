@@ -1,6 +1,6 @@
 package com.dugan.agent.domain.latency
 
-import android.util.Log
+import com.dugan.agent.util.AgentLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -56,7 +56,7 @@ class SpeculativeExecutor @Inject constructor() {
     fun speculate(scope: CoroutineScope, work: suspend () -> Unit): Job {
         current?.cancel()
         attempts.incrementAndGet()
-        return scope.launch { runCatching { work() }.onFailure { Log.d(TAG, "speculation cancelled") } }
+        return scope.launch { runCatching { work() }.onFailure { AgentLog.d(TAG, "speculation cancelled") } }
             .also { current = it }
     }
 

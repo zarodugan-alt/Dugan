@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -14,6 +15,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -36,18 +38,29 @@ import com.dugan.agent.domain.model.ApiProvider
 import com.dugan.agent.domain.model.KeyTestResult
 
 /**
- * One BYOK key: masked input, signup link, and a Test Connection button that
- * makes the smallest valid call the provider accepts.
+ * One BYOK key.
+ *
+ * Save and Test are separate actions on purpose. Saving is a purely local write
+ * to the encrypted vault and must work with no network at all; Test additionally
+ * spends a request proving the key is live. Requiring a green Test before a key
+ * could be stored would make the app unusable offline and would burn quota on
+ * every edit.
+ *
+ * @param storedMask masked form of the key already in the vault, or null
+ * @param dirty true when [value] differs from what is stored -- enables Save
  */
 @Composable
 fun KeyField(
     provider: ApiProvider,
     value: String,
+    storedMask: String?,
+    dirty: Boolean,
     onValueChange: (String) -> Unit,
+    onSave: () -> Unit,
     onTest: () -> Unit,
     testResult: KeyTestResult,
     modifier: Modifier = Modifier,
-    compact: Boolean = false,
+    onClear: (() -> Unit)? = null,
 ) {
     var revealed by remember { mutableStateOf(false) }
     val uriHandler = LocalUriHandler.current
@@ -73,9 +86,11 @@ fun KeyField(
                     )
                 }
                 TextButton(onClick = { runCatching { uriHandler.openUri(provider.signupUrl) } }) {
-                    Text("Open")
+                    Text("Sign up")
                 }
             }
+
+            Spacer(Modifier.height(10.dp))
 
             OutlinedTextField(
                 value = value,
@@ -83,6 +98,9 @@ fun KeyField(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 label = { Text("Paste key") },
+                placeholder = {
+                    Text(storedMask ?: "gsk_… / AIza… / …")
+                },
                 visualTransformation = if (revealed) {
                     VisualTransformation.None
                 } else {
@@ -97,25 +115,50 @@ fun KeyField(
                     }
                 },
                 textStyle = MaterialTheme.typography.bodyMedium,
+                supportingText = {
+                    when {
+                        dirty && storedMask != null ->
+                            Text("Unsaved change — stored key is $storedMask")
+                        storedMask != null ->
+                            Text("Stored: $storedMask")
+                        else ->
+                            Text("Not configured")
+                    }
+                },
             )
+
+            Spacer(Modifier.height(4.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(onClick = onTest, enabled = value.isNotBlank() && testResult !is KeyTestResult.Testing) {
-                    Text(if (testResult is KeyTestResult.Testing) "Testing…" else "Test Connection")
+                Button(
+                    onClick = onSave,
+                    enabled = dirty && value.isNotBlank(),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Save")
                 }
-                TestStatusBadge(testResult)
+                Button(
+                    onClick = onTest,
+                    // Test saves first so the client reads the new key from the vault.
+                    enabled = value.isNotBlank() && testResult !is KeyTestResult.Testing,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(if (testResult is KeyTestResult.Testing) "Testing…" else "Test")
+                }
+                if (onClear != null && storedMask != null) {
+                    TextButton(onClick = onClear) { Text("Remove") }
+                }
             }
 
-            if (!compact && testResult is KeyTestResult.Invalid) {
-                Text(
-                    testResult.detail,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TestStatusBadge(testResult)
             }
         }
     }
@@ -124,15 +167,25 @@ fun KeyField(
 @Composable
 private fun TestStatusBadge(result: KeyTestResult) {
     when (result) {
+        is KeyTestResult.Testing -> Text(
+            "Contacting provider…",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
         is KeyTestResult.Valid -> Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 Icons.Filled.CheckCircle,
                 contentDescription = "Valid",
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(18.dp),
             )
             Spacer(Modifier.width(6.dp))
-            Text("OK", style = MaterialTheme.typography.labelMedium)
+            Text(
+                "Reachable — ${result.detail}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
         }
 
         is KeyTestResult.Invalid -> Row(verticalAlignment = Alignment.CenterVertically) {
@@ -140,12 +193,16 @@ private fun TestStatusBadge(result: KeyTestResult) {
                 Icons.Filled.ErrorOutline,
                 contentDescription = "Invalid",
                 tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(18.dp),
             )
             Spacer(Modifier.width(6.dp))
-            Text("Failed", style = MaterialTheme.typography.labelMedium)
+            Text(
+                result.detail,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
         }
 
-        else -> Spacer(Modifier.height(20.dp))
+        KeyTestResult.Untested -> Spacer(Modifier.height(18.dp))
     }
 }
