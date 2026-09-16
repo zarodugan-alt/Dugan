@@ -11,6 +11,13 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  # Needed by the "Report failure to the pull request" step. Runner logs are
+  # served from a host that is not always reachable, so a failing build writes
+  # its own error tail into the PR instead of relying on the log viewer.
+  pull-requests: write
+
 env:
   # Pinned so the build does not drift when the runner image updates.
   GRADLE_VERSION: '8.9'
@@ -49,6 +56,33 @@ jobs:
   # ---------------------------------------------------------------------------
   # Provisions the toolchain once and shares it via the Gradle cache.
   # ---------------------------------------------------------------------------
+
+      # Runner logs are served from a host that is not always reachable, so a red
+      # job posts its own error tail here instead of relying on the log viewer.
+      - name: Report failure to the pull request
+        if: failure() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JOB_NAME: ${{ github.job }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "### :x: `$JOB_NAME` failed"
+            echo
+            echo "[Full log]($RUN_URL)"
+            echo
+            echo '```'
+            if [ -f build.log ]; then
+              grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 40
+              echo "----- last 60 lines -----"
+              tail -n 60 build.log
+            else
+              echo "(no build.log produced -- failed before the Gradle invocation)"
+            fi
+            echo '```'
+          } > /tmp/fail-body.md
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/fail-body.md
   unit-tests:
     name: Unit tests
     runs-on: ubuntu-latest
@@ -96,7 +130,9 @@ jobs:
       # Configuration cache is off in CI: KSP + Hilt round-trips are the usual
       # source of false failures there, and it saves nothing on a cold runner.
       - name: Run JVM unit tests
-        run: gradle testDebugUnitTest --no-configuration-cache --stacktrace
+        run: |
+          gradle testDebugUnitTest --no-configuration-cache --stacktrace 2>&1 | tee build.log
+          exit "${PIPESTATUS[0]}"
 
       - name: Upload test reports
         if: always()
@@ -109,6 +145,33 @@ jobs:
   # ---------------------------------------------------------------------------
   # Debug APK. This is the artifact you sideload.
   # ---------------------------------------------------------------------------
+
+      # Runner logs are served from a host that is not always reachable, so a red
+      # job posts its own error tail here instead of relying on the log viewer.
+      - name: Report failure to the pull request
+        if: failure() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JOB_NAME: ${{ github.job }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "### :x: `$JOB_NAME` failed"
+            echo
+            echo "[Full log]($RUN_URL)"
+            echo
+            echo '```'
+            if [ -f build.log ]; then
+              grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 40
+              echo "----- last 60 lines -----"
+              tail -n 60 build.log
+            else
+              echo "(no build.log produced -- failed before the Gradle invocation)"
+            fi
+            echo '```'
+          } > /tmp/fail-body.md
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/fail-body.md
   assemble-debug:
     name: Assemble debug APK
     runs-on: ubuntu-latest
@@ -154,7 +217,9 @@ jobs:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       - name: Build
-        run: gradle assembleDebug --no-configuration-cache --stacktrace
+        run: |
+          gradle assembleDebug --no-configuration-cache 2>&1 | tee build.log
+          exit "${PIPESTATUS[0]}" --stacktrace
 
       - name: Publish the Gradle wrapper for local use
         # The wrapper JAR is not committed (binary), so generate it here and ship
@@ -182,6 +247,33 @@ jobs:
   # actually keeps the serializers, Room DAOs, Telecom services and Hilt
   # generated classes.
   # ---------------------------------------------------------------------------
+
+      # Runner logs are served from a host that is not always reachable, so a red
+      # job posts its own error tail here instead of relying on the log viewer.
+      - name: Report failure to the pull request
+        if: failure() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JOB_NAME: ${{ github.job }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "### :x: `$JOB_NAME` failed"
+            echo
+            echo "[Full log]($RUN_URL)"
+            echo
+            echo '```'
+            if [ -f build.log ]; then
+              grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 40
+              echo "----- last 60 lines -----"
+              tail -n 60 build.log
+            else
+              echo "(no build.log produced -- failed before the Gradle invocation)"
+            fi
+            echo '```'
+          } > /tmp/fail-body.md
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/fail-body.md
   assemble-release:
     name: Assemble release APK (R8)
     runs-on: ubuntu-latest
@@ -227,7 +319,9 @@ jobs:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       - name: Build (minified + resource-shrunk)
-        run: gradle assembleRelease --no-configuration-cache --stacktrace
+        run: |
+          gradle assembleRelease --no-configuration-cache 2>&1 | tee build.log
+          exit "${PIPESTATUS[0]}" --stacktrace
 
       - uses: actions/upload-artifact@v4
         with:
@@ -245,6 +339,33 @@ jobs:
   # google-services.json is synthesised here: it is a per-developer secret and is
   # deliberately not committed. Replace with a real one before shipping VoIP.
   # ---------------------------------------------------------------------------
+
+      # Runner logs are served from a host that is not always reachable, so a red
+      # job posts its own error tail here instead of relying on the log viewer.
+      - name: Report failure to the pull request
+        if: failure() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JOB_NAME: ${{ github.job }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "### :x: `$JOB_NAME` failed"
+            echo
+            echo "[Full log]($RUN_URL)"
+            echo
+            echo '```'
+            if [ -f build.log ]; then
+              grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 40
+              echo "----- last 60 lines -----"
+              tail -n 60 build.log
+            else
+              echo "(no build.log produced -- failed before the Gradle invocation)"
+            fi
+            echo '```'
+          } > /tmp/fail-body.md
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/fail-body.md
   assemble-firebase:
     name: Assemble with Firebase signalling
     runs-on: ubuntu-latest
@@ -327,3 +448,30 @@ jobs:
 
       - name: Build with the firebase source set
         run: gradle assembleDebug -Pdugan.firebase=true --no-configuration-cache --stacktrace
+
+      # Runner logs are served from a host that is not always reachable, so a red
+      # job posts its own error tail here instead of relying on the log viewer.
+      - name: Report failure to the pull request
+        if: failure() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JOB_NAME: ${{ github.job }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "### :x: `$JOB_NAME` failed"
+            echo
+            echo "[Full log]($RUN_URL)"
+            echo
+            echo '```'
+            if [ -f build.log ]; then
+              grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 40
+              echo "----- last 60 lines -----"
+              tail -n 60 build.log
+            else
+              echo "(no build.log produced -- failed before the Gradle invocation)"
+            fi
+            echo '```'
+          } > /tmp/fail-body.md
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/fail-body.md
