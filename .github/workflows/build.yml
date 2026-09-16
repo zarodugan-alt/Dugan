@@ -60,13 +60,20 @@ jobs:
       # Runner logs are served from a host that is not always reachable, so a red
       # job posts its own error tail here instead of relying on the log viewer.
       - name: Report failure to the pull request
-        if: failure() && github.event_name == 'pull_request'
+        if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           JOB_NAME: ${{ github.job }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          # Resolve the PR from the branch rather than github.event, because this
+          # workflow also runs on push -- where there is no pull_request payload.
+          PR_NUMBER=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$HEAD_BRANCH" \
+            --state open --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No open pull request for $HEAD_BRANCH; writing the report to the step log only."
+          fi
           {
             echo "### :x: `$JOB_NAME` failed"
             echo
@@ -82,7 +89,11 @@ jobs:
             fi
             echo '```'
           } > /tmp/fail-body.md
-          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/fail-body.md
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/fail-body.md
+          else
+            cat /tmp/fail-body.md
+          fi
   unit-tests:
     name: Unit tests
     runs-on: ubuntu-latest
@@ -149,13 +160,20 @@ jobs:
       # Runner logs are served from a host that is not always reachable, so a red
       # job posts its own error tail here instead of relying on the log viewer.
       - name: Report failure to the pull request
-        if: failure() && github.event_name == 'pull_request'
+        if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           JOB_NAME: ${{ github.job }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          # Resolve the PR from the branch rather than github.event, because this
+          # workflow also runs on push -- where there is no pull_request payload.
+          PR_NUMBER=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$HEAD_BRANCH" \
+            --state open --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No open pull request for $HEAD_BRANCH; writing the report to the step log only."
+          fi
           {
             echo "### :x: `$JOB_NAME` failed"
             echo
@@ -171,7 +189,11 @@ jobs:
             fi
             echo '```'
           } > /tmp/fail-body.md
-          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/fail-body.md
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/fail-body.md
+          else
+            cat /tmp/fail-body.md
+          fi
   assemble-debug:
     name: Assemble debug APK
     runs-on: ubuntu-latest
@@ -251,13 +273,20 @@ jobs:
       # Runner logs are served from a host that is not always reachable, so a red
       # job posts its own error tail here instead of relying on the log viewer.
       - name: Report failure to the pull request
-        if: failure() && github.event_name == 'pull_request'
+        if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           JOB_NAME: ${{ github.job }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          # Resolve the PR from the branch rather than github.event, because this
+          # workflow also runs on push -- where there is no pull_request payload.
+          PR_NUMBER=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$HEAD_BRANCH" \
+            --state open --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No open pull request for $HEAD_BRANCH; writing the report to the step log only."
+          fi
           {
             echo "### :x: `$JOB_NAME` failed"
             echo
@@ -273,7 +302,11 @@ jobs:
             fi
             echo '```'
           } > /tmp/fail-body.md
-          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/fail-body.md
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/fail-body.md
+          else
+            cat /tmp/fail-body.md
+          fi
   assemble-release:
     name: Assemble release APK (R8)
     runs-on: ubuntu-latest
@@ -343,13 +376,20 @@ jobs:
       # Runner logs are served from a host that is not always reachable, so a red
       # job posts its own error tail here instead of relying on the log viewer.
       - name: Report failure to the pull request
-        if: failure() && github.event_name == 'pull_request'
+        if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           JOB_NAME: ${{ github.job }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          # Resolve the PR from the branch rather than github.event, because this
+          # workflow also runs on push -- where there is no pull_request payload.
+          PR_NUMBER=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$HEAD_BRANCH" \
+            --state open --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No open pull request for $HEAD_BRANCH; writing the report to the step log only."
+          fi
           {
             echo "### :x: `$JOB_NAME` failed"
             echo
@@ -365,7 +405,11 @@ jobs:
             fi
             echo '```'
           } > /tmp/fail-body.md
-          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/fail-body.md
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/fail-body.md
+          else
+            cat /tmp/fail-body.md
+          fi
   assemble-firebase:
     name: Assemble with Firebase signalling
     runs-on: ubuntu-latest
@@ -452,13 +496,20 @@ jobs:
       # Runner logs are served from a host that is not always reachable, so a red
       # job posts its own error tail here instead of relying on the log viewer.
       - name: Report failure to the pull request
-        if: failure() && github.event_name == 'pull_request'
+        if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           JOB_NAME: ${{ github.job }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          # Resolve the PR from the branch rather than github.event, because this
+          # workflow also runs on push -- where there is no pull_request payload.
+          PR_NUMBER=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$HEAD_BRANCH" \
+            --state open --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No open pull request for $HEAD_BRANCH; writing the report to the step log only."
+          fi
           {
             echo "### :x: `$JOB_NAME` failed"
             echo
@@ -474,4 +525,8 @@ jobs:
             fi
             echo '```'
           } > /tmp/fail-body.md
-          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/fail-body.md
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/fail-body.md
+          else
+            cat /tmp/fail-body.md
+          fi
