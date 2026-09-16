@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- App-internal storage (default download folder lives under
+         getExternalStorageDirectory). -->
+    <external-files-path name="external_files" path="." />
+    <files-path name="internal_files" path="." />
+    <cache-path name="cache" path="." />
+    <!-- User-picked custom folders. -->
+    <external-path name="external_storage" path="." />
+    <root-path name="root" path="." />
+</paths>

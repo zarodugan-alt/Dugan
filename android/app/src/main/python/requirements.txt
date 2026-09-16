@@ -1,0 +1,5 @@
+# Python dependencies installed by Chaquopy at build time.
+# (Also declared in android/app/build.gradle → chaquopy.defaultConfig.pip;
+# this file is kept in sync for reference and tooling.)
+yt-dlp>=2024.8.6
+mutagen>=1.47.0

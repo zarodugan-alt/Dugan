@@ -1,0 +1,10 @@
+# Launcher icon configuration for flutter_launcher_icons.
+# Regenerate with:
+#   dart run flutter_launcher_icons
+flutter_launcher_icons:
+  image_path: assets/logo.png
+  android: true
+  ios: true
+  remove_alpha_ios: true
+  adaptive_icon_background: '#0A0A0F'
+  adaptive_icon_foreground: assets/logo_fg.png
