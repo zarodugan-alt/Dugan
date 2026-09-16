@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The Compose theme (ui/theme/Theme.kt) owns every colour at runtime, including
+      the ten user-selectable schemes. This platform theme only has to get us to the
+      first composed frame without a white flash.
+    -->
+    <style name="Theme.Dugan" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/ic_launcher_background</item>
+        <item name="android:navigationBarColor">@color/ic_launcher_background</item>
+        <item name="android:statusBarColor">@color/ic_launcher_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowActivityTransitions">true</item>
+    </style>
+</resources>

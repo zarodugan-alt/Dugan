@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Dugan</string>
+    <string name="agent_channel_name">Agent activity</string>
+    <string name="agent_channel_desc">Shows while the voice agent is listening, thinking or speaking.</string>
+    <string name="call_channel_name">Calls</string>
+    <string name="call_channel_desc">In-call status and controls.</string>
+    <string name="notif_agent_active">Voice Agent Active</string>
+    <string name="notif_action_end">End</string>
+    <string name="notif_action_stop_listening">Stop listening</string>
+</resources>

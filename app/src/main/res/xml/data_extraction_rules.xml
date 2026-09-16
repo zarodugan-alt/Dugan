@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ backup / device-to-device transfer rules.
+
+  Same rule as backup_rules.xml, applied to both the cloud and transfer targets:
+  the BYOK vault and its Keystore-derived keysets never leave the device.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="byok_vault.xml" />
+        <exclude domain="sharedpref" path="__androidx_security_crypto_encrypted_prefs__prefs__" />
+        <exclude domain="sharedpref" path="__androidx_security_crypto_encrypted_prefs_key_keyset__" />
+        <exclude domain="sharedpref" path="__androidx_security_crypto_encrypted_prefs_value_keyset__" />
+        <exclude domain="database" path="dugan_history.db" />
+        <exclude domain="database" path="dugan_history.db-wal" />
+        <exclude domain="database" path="dugan_history.db-shm" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="byok_vault.xml" />
+        <exclude domain="sharedpref" path="__androidx_security_crypto_encrypted_prefs__prefs__" />
+        <exclude domain="sharedpref" path="__androidx_security_crypto_encrypted_prefs_key_keyset__" />
+        <exclude domain="sharedpref" path="__androidx_security_crypto_encrypted_prefs_value_keyset__" />
+        <exclude domain="database" path="dugan_history.db" />
+    </device-transfer>
+</data-extraction-rules>

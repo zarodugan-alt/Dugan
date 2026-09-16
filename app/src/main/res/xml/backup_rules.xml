@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Pre-Android-12 auto-backup rules.
+
+  byok_vault.xml MUST be excluded: it is produced by EncryptedSharedPreferences and
+  its ciphertext is bound to a device-local Android Keystore master key. Restoring it
+  onto another device yields undecryptable garbage that also wedges the vault, so the
+  user would lose their keys AND hit a crash loop.
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="byok_vault.xml" />
+    <exclude domain="sharedpref" path="__androidx_security_crypto_encrypted_prefs__prefs__" />
+    <exclude domain="sharedpref" path="__androidx_security_crypto_encrypted_prefs_key_keyset__" />
+    <exclude domain="sharedpref" path="__androidx_security_crypto_encrypted_prefs_value_keyset__" />
+    <exclude domain="database" path="dugan_history.db" />
+    <exclude domain="database" path="dugan_history.db-wal" />
+    <exclude domain="database" path="dugan_history.db-shm" />
+</full-backup-content>
