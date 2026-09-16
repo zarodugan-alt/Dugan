@@ -80,23 +80,14 @@ jobs:
             echo "[Full log]($RUN_URL)"
             echo
             echo '```'
-            # Test names alone are not enough to act on -- include the assertion
-            # messages from the JUnit XML, which is the only detail the log omits.
+            # Test names alone are not enough to act on -- pull the assertion
+            # messages out of the JUnit XML, which is the detail the log omits.
+            # Shell-only on purpose: a nested heredoc would have to be re-indented
+            # to sit inside this YAML block scalar, and that is fragile.
             for xml in app/build/test-results/*/*.xml; do
               [ -f "$xml" ] || continue
-              python3 - "$xml" <<'PYEOF' || true
-import sys, xml.etree.ElementTree as ET
-try:
-    root = ET.parse(sys.argv[1]).getroot()
-except Exception:
-    sys.exit(0)
-for tc in root.iter("testcase"):
-    for fail in list(tc.findall("failure")) + list(tc.findall("error")):
-        print(f"{tc.get('classname')}.{tc.get('name')}")
-        text = (fail.get("message") or "") + "\n" + (fail.text or "")
-        print("\n".join("    " + l for l in text.strip().splitlines()[:14]))
-        print()
-PYEOF
+              sed -n 's/.*<failure message="\([^"]*\)".*/ASSERTION: \1/p' "$xml" | head -n 20
+              sed -n 's/.*<error message="\([^"]*\)".*/ERROR: \1/p' "$xml" | head -n 20
             done
             if [ -f build.log ]; then
               grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 200
@@ -198,23 +189,14 @@ PYEOF
             echo "[Full log]($RUN_URL)"
             echo
             echo '```'
-            # Test names alone are not enough to act on -- include the assertion
-            # messages from the JUnit XML, which is the only detail the log omits.
+            # Test names alone are not enough to act on -- pull the assertion
+            # messages out of the JUnit XML, which is the detail the log omits.
+            # Shell-only on purpose: a nested heredoc would have to be re-indented
+            # to sit inside this YAML block scalar, and that is fragile.
             for xml in app/build/test-results/*/*.xml; do
               [ -f "$xml" ] || continue
-              python3 - "$xml" <<'PYEOF' || true
-import sys, xml.etree.ElementTree as ET
-try:
-    root = ET.parse(sys.argv[1]).getroot()
-except Exception:
-    sys.exit(0)
-for tc in root.iter("testcase"):
-    for fail in list(tc.findall("failure")) + list(tc.findall("error")):
-        print(f"{tc.get('classname')}.{tc.get('name')}")
-        text = (fail.get("message") or "") + "\n" + (fail.text or "")
-        print("\n".join("    " + l for l in text.strip().splitlines()[:14]))
-        print()
-PYEOF
+              sed -n 's/.*<failure message="\([^"]*\)".*/ASSERTION: \1/p' "$xml" | head -n 20
+              sed -n 's/.*<error message="\([^"]*\)".*/ERROR: \1/p' "$xml" | head -n 20
             done
             if [ -f build.log ]; then
               grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 200
@@ -329,23 +311,14 @@ PYEOF
             echo "[Full log]($RUN_URL)"
             echo
             echo '```'
-            # Test names alone are not enough to act on -- include the assertion
-            # messages from the JUnit XML, which is the only detail the log omits.
+            # Test names alone are not enough to act on -- pull the assertion
+            # messages out of the JUnit XML, which is the detail the log omits.
+            # Shell-only on purpose: a nested heredoc would have to be re-indented
+            # to sit inside this YAML block scalar, and that is fragile.
             for xml in app/build/test-results/*/*.xml; do
               [ -f "$xml" ] || continue
-              python3 - "$xml" <<'PYEOF' || true
-import sys, xml.etree.ElementTree as ET
-try:
-    root = ET.parse(sys.argv[1]).getroot()
-except Exception:
-    sys.exit(0)
-for tc in root.iter("testcase"):
-    for fail in list(tc.findall("failure")) + list(tc.findall("error")):
-        print(f"{tc.get('classname')}.{tc.get('name')}")
-        text = (fail.get("message") or "") + "\n" + (fail.text or "")
-        print("\n".join("    " + l for l in text.strip().splitlines()[:14]))
-        print()
-PYEOF
+              sed -n 's/.*<failure message="\([^"]*\)".*/ASSERTION: \1/p' "$xml" | head -n 20
+              sed -n 's/.*<error message="\([^"]*\)".*/ERROR: \1/p' "$xml" | head -n 20
             done
             if [ -f build.log ]; then
               grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 200
@@ -450,23 +423,14 @@ PYEOF
             echo "[Full log]($RUN_URL)"
             echo
             echo '```'
-            # Test names alone are not enough to act on -- include the assertion
-            # messages from the JUnit XML, which is the only detail the log omits.
+            # Test names alone are not enough to act on -- pull the assertion
+            # messages out of the JUnit XML, which is the detail the log omits.
+            # Shell-only on purpose: a nested heredoc would have to be re-indented
+            # to sit inside this YAML block scalar, and that is fragile.
             for xml in app/build/test-results/*/*.xml; do
               [ -f "$xml" ] || continue
-              python3 - "$xml" <<'PYEOF' || true
-import sys, xml.etree.ElementTree as ET
-try:
-    root = ET.parse(sys.argv[1]).getroot()
-except Exception:
-    sys.exit(0)
-for tc in root.iter("testcase"):
-    for fail in list(tc.findall("failure")) + list(tc.findall("error")):
-        print(f"{tc.get('classname')}.{tc.get('name')}")
-        text = (fail.get("message") or "") + "\n" + (fail.text or "")
-        print("\n".join("    " + l for l in text.strip().splitlines()[:14]))
-        print()
-PYEOF
+              sed -n 's/.*<failure message="\([^"]*\)".*/ASSERTION: \1/p' "$xml" | head -n 20
+              sed -n 's/.*<error message="\([^"]*\)".*/ERROR: \1/p' "$xml" | head -n 20
             done
             if [ -f build.log ]; then
               grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 200
@@ -588,23 +552,14 @@ PYEOF
             echo "[Full log]($RUN_URL)"
             echo
             echo '```'
-            # Test names alone are not enough to act on -- include the assertion
-            # messages from the JUnit XML, which is the only detail the log omits.
+            # Test names alone are not enough to act on -- pull the assertion
+            # messages out of the JUnit XML, which is the detail the log omits.
+            # Shell-only on purpose: a nested heredoc would have to be re-indented
+            # to sit inside this YAML block scalar, and that is fragile.
             for xml in app/build/test-results/*/*.xml; do
               [ -f "$xml" ] || continue
-              python3 - "$xml" <<'PYEOF' || true
-import sys, xml.etree.ElementTree as ET
-try:
-    root = ET.parse(sys.argv[1]).getroot()
-except Exception:
-    sys.exit(0)
-for tc in root.iter("testcase"):
-    for fail in list(tc.findall("failure")) + list(tc.findall("error")):
-        print(f"{tc.get('classname')}.{tc.get('name')}")
-        text = (fail.get("message") or "") + "\n" + (fail.text or "")
-        print("\n".join("    " + l for l in text.strip().splitlines()[:14]))
-        print()
-PYEOF
+              sed -n 's/.*<failure message="\([^"]*\)".*/ASSERTION: \1/p' "$xml" | head -n 20
+              sed -n 's/.*<error message="\([^"]*\)".*/ERROR: \1/p' "$xml" | head -n 20
             done
             if [ -f build.log ]; then
               grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 200
