@@ -80,6 +80,24 @@ jobs:
             echo "[Full log]($RUN_URL)"
             echo
             echo '```'
+            # Test names alone are not enough to act on -- include the assertion
+            # messages from the JUnit XML, which is the only detail the log omits.
+            for xml in app/build/test-results/*/*.xml; do
+              [ -f "$xml" ] || continue
+              python3 - "$xml" <<'PYEOF' || true
+import sys, xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    sys.exit(0)
+for tc in root.iter("testcase"):
+    for fail in list(tc.findall("failure")) + list(tc.findall("error")):
+        print(f"{tc.get('classname')}.{tc.get('name')}")
+        text = (fail.get("message") or "") + "\n" + (fail.text or "")
+        print("\n".join("    " + l for l in text.strip().splitlines()[:14]))
+        print()
+PYEOF
+            done
             if [ -f build.log ]; then
               grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 200
               echo "----- last 60 lines -----"
@@ -180,6 +198,24 @@ jobs:
             echo "[Full log]($RUN_URL)"
             echo
             echo '```'
+            # Test names alone are not enough to act on -- include the assertion
+            # messages from the JUnit XML, which is the only detail the log omits.
+            for xml in app/build/test-results/*/*.xml; do
+              [ -f "$xml" ] || continue
+              python3 - "$xml" <<'PYEOF' || true
+import sys, xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    sys.exit(0)
+for tc in root.iter("testcase"):
+    for fail in list(tc.findall("failure")) + list(tc.findall("error")):
+        print(f"{tc.get('classname')}.{tc.get('name')}")
+        text = (fail.get("message") or "") + "\n" + (fail.text or "")
+        print("\n".join("    " + l for l in text.strip().splitlines()[:14]))
+        print()
+PYEOF
+            done
             if [ -f build.log ]; then
               grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 200
               echo "----- last 60 lines -----"
@@ -293,6 +329,24 @@ jobs:
             echo "[Full log]($RUN_URL)"
             echo
             echo '```'
+            # Test names alone are not enough to act on -- include the assertion
+            # messages from the JUnit XML, which is the only detail the log omits.
+            for xml in app/build/test-results/*/*.xml; do
+              [ -f "$xml" ] || continue
+              python3 - "$xml" <<'PYEOF' || true
+import sys, xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    sys.exit(0)
+for tc in root.iter("testcase"):
+    for fail in list(tc.findall("failure")) + list(tc.findall("error")):
+        print(f"{tc.get('classname')}.{tc.get('name')}")
+        text = (fail.get("message") or "") + "\n" + (fail.text or "")
+        print("\n".join("    " + l for l in text.strip().splitlines()[:14]))
+        print()
+PYEOF
+            done
             if [ -f build.log ]; then
               grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 200
               echo "----- last 60 lines -----"
@@ -396,6 +450,24 @@ jobs:
             echo "[Full log]($RUN_URL)"
             echo
             echo '```'
+            # Test names alone are not enough to act on -- include the assertion
+            # messages from the JUnit XML, which is the only detail the log omits.
+            for xml in app/build/test-results/*/*.xml; do
+              [ -f "$xml" ] || continue
+              python3 - "$xml" <<'PYEOF' || true
+import sys, xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    sys.exit(0)
+for tc in root.iter("testcase"):
+    for fail in list(tc.findall("failure")) + list(tc.findall("error")):
+        print(f"{tc.get('classname')}.{tc.get('name')}")
+        text = (fail.get("message") or "") + "\n" + (fail.text or "")
+        print("\n".join("    " + l for l in text.strip().splitlines()[:14]))
+        print()
+PYEOF
+            done
             if [ -f build.log ]; then
               grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 200
               echo "----- last 60 lines -----"
@@ -516,6 +588,24 @@ jobs:
             echo "[Full log]($RUN_URL)"
             echo
             echo '```'
+            # Test names alone are not enough to act on -- include the assertion
+            # messages from the JUnit XML, which is the only detail the log omits.
+            for xml in app/build/test-results/*/*.xml; do
+              [ -f "$xml" ] || continue
+              python3 - "$xml" <<'PYEOF' || true
+import sys, xml.etree.ElementTree as ET
+try:
+    root = ET.parse(sys.argv[1]).getroot()
+except Exception:
+    sys.exit(0)
+for tc in root.iter("testcase"):
+    for fail in list(tc.findall("failure")) + list(tc.findall("error")):
+        print(f"{tc.get('classname')}.{tc.get('name')}")
+        text = (fail.get("message") or "") + "\n" + (fail.text or "")
+        print("\n".join("    " + l for l in text.strip().splitlines()[:14]))
+        print()
+PYEOF
+            done
             if [ -f build.log ]; then
               grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 200
               echo "----- last 60 lines -----"

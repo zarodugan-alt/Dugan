@@ -51,14 +51,26 @@ class VoiceCommandParser @Inject constructor() {
     }
 
     /** "yes" / "yeah" / "go ahead" -- used to confirm a dial. */
-    fun isAffirmative(transcript: String): Boolean {
-        val t = transcript.trim().lowercase().replace(Regex("[^a-z ]"), "").trim()
-        return t in AFFIRMATIVE
-    }
+    fun isAffirmative(transcript: String): Boolean = matches(transcript, AFFIRMATIVE)
 
-    fun isNegative(transcript: String): Boolean {
-        val t = transcript.trim().lowercase().replace(Regex("[^a-z ]"), "").trim()
-        return t in NEGATIVE
+    fun isNegative(transcript: String): Boolean = matches(transcript, NEGATIVE)
+
+    /**
+     * Confirmation matching.
+     *
+     * Accepts the phrase set either as the whole utterance or as its leading word,
+     * so "yeah, go ahead" counts but "that's not right" does not. Only the leading
+     * word is considered on purpose: these gate a dial, and matching a word
+     * anywhere in the sentence would turn "no, that's not right" into a yes.
+     */
+    private fun matches(transcript: String, phrases: Set<String>): Boolean {
+        val t = transcript.trim().lowercase()
+            .replace(Regex("[^a-z ]"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        if (t.isEmpty()) return false
+        if (t in phrases) return true
+        return t.substringBefore(' ') in phrases
     }
 
     /**

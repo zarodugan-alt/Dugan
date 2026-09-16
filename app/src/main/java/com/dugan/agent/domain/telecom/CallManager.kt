@@ -144,15 +144,17 @@ class CallManager @Inject constructor(
         // Confirmation of an already-proposed dial takes priority over parsing.
         pendingDial?.let { proposed ->
             when {
+                // Negative is tested first: a dial is a side effect, so on an
+                // ambiguous reply the safe answer is to not place the call.
+                parser.isNegative(transcript) -> {
+                    pendingDial = null
+                    orchestrator.speak("Okay, cancelled.")
+                    return true
+                }
                 parser.isAffirmative(transcript) -> {
                     pendingDial = null
                     orchestrator.speak("Dialling now.")
                     placeCall(proposed)
-                    return true
-                }
-                parser.isNegative(transcript) -> {
-                    pendingDial = null
-                    orchestrator.speak("Okay, cancelled.")
                     return true
                 }
             }

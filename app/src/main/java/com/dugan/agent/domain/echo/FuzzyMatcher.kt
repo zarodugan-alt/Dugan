@@ -85,5 +85,12 @@ class FuzzyMatcher @Inject constructor() {
     }
 
     fun normalize(text: String): String =
-        text.lowercase().replace(Regex("[^a-z0-9 ]"), " ").replace(Regex("\\s+"), " ").trim()
+        text.lowercase()
+            // Drop apostrophes rather than blanking them: "it's" and "its" are the
+            // same word, and STT picks between them arbitrarily. Blanking to a space
+            // would split "it's" into two tokens and cost a permanent edit distance.
+            .replace("'", "")
+            .replace(Regex("[^a-z0-9 ]"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
 }
