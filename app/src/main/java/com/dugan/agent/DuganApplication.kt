@@ -50,7 +50,7 @@ class DuganApplication : Application() {
             val smartTurn = SmartTurnEotDetector.loadOrNull(assets)
             eotController.attach(smartTurn)
             vadController.attach(silero)
-            android.util.AgentLog.i(
+            AgentLog.i(
                 "Dugan",
                 "models: silero=${silero != null} smartTurn=${smartTurn != null}",
             )

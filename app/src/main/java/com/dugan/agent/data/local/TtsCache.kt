@@ -40,7 +40,7 @@ class TtsCache @Inject constructor() {
     fun clear() = cache.evictAll()
 
     /** Seed the phrases the agent says constantly, so the first hit is never cold. */
-    fun prewarm(warm: List<String>, settings: DuganSettings, synthesize: suspend (String) -> ByteArray?) {
+    suspend fun prewarm(warm: List<String>, settings: DuganSettings, synthesize: suspend (String) -> ByteArray?) {
         warm.forEach { text ->
             val key = keyFor(text, settings)
             if (cache.get(key) != null) return@forEach

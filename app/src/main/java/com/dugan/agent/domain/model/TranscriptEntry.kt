@@ -3,6 +3,19 @@ package com.dugan.agent.domain.model
 enum class Speaker { User, Agent, System }
 
 /**
+ * Wire role for the LLM.
+ *
+ * A separate extension rather than a property on the enum so the wire vocabulary
+ * stays next to the API clients that own it, and so [Speaker.System] -- which is a
+ * UI concept for notices -- maps onto the `system` role providers expect.
+ */
+fun Speaker.chatRole(): String = when (this) {
+    Speaker.User -> "user"
+    Speaker.Agent -> "assistant"
+    Speaker.System -> "system"
+}
+
+/**
  * One bubble in the transcript.
  *
  * @property isFinal false while the text is still streaming in; the UI renders

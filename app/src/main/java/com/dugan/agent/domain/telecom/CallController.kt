@@ -74,7 +74,8 @@ class CallController @Inject constructor() {
                     null
                 },
                 isRinging = primary.state == Call.STATE_RINGING,
-                isMuted = primary.isMuted,
+                // Call exposes no isMuted(); mute state arrives via CallAudioState
+                // in VoiceInCallService.onCallAudioStateChanged, so keep the last value.
                 isOnHold = primary.state == Call.STATE_HOLDING,
             )
         }

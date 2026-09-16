@@ -84,7 +84,9 @@ class UnrealSpeechTtsClient @Inject constructor(
                 return@callbackFlow
             }
             val bytes = runCatching { resp.body?.bytes() }.getOrNull()
-            if (bytes.isNullOrEmpty()) {
+            // ByteArray? has no isNullOrEmpty() in the stdlib -- check explicitly
+            // so `bytes` smart-casts to non-null for the decoder below.
+            if (bytes == null || bytes.isEmpty()) {
                 close(ApiException(500, provider, "empty audio body"))
                 return@callbackFlow
             }

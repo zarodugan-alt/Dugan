@@ -15,7 +15,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class DialerViewModel @Inject constructor(
-    private val contacts: ContactRepository,
+    private val contactRepository: ContactRepository,
     private val callManager: CallManager,
 ) : ViewModel() {
 
@@ -41,15 +41,15 @@ class DialerViewModel @Inject constructor(
     fun refresh() {
         viewModelScope.launch {
             _loading.value = true
-            _recents.value = contacts.recentCalls()
-            _contacts.value = contacts.contacts(_query.value)
+            _recents.value = contactRepository.recentCalls()
+            _contacts.value = contactRepository.contacts(_query.value)
             _loading.value = false
         }
     }
 
     fun setQuery(value: String) {
         _query.value = value
-        viewModelScope.launch { _contacts.value = contacts.contacts(value) }
+        viewModelScope.launch { _contacts.value = contactRepository.contacts(value) }
     }
 
     fun press(digit: String) {
@@ -80,8 +80,8 @@ class DialerViewModel @Inject constructor(
 
     fun deleteRecent(id: Long) {
         viewModelScope.launch {
-            contacts.deleteRecentCall(id)
-            _recents.value = contacts.recentCalls()
+            contactRepository.deleteRecentCall(id)
+            _recents.value = contactRepository.recentCalls()
         }
     }
 }

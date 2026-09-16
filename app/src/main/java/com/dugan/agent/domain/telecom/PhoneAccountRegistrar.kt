@@ -37,9 +37,10 @@ class PhoneAccountRegistrar @Inject constructor(
         val telecom = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager ?: return
         runCatching {
             val account = PhoneAccount.builder(accountHandle, "Voice Agent")
+                // CAPABILITY_SELF_MANAGED is what makes this a VoIP-only account.
+                // PhoneAccount.Builder.setIsSelfManaged() is @SystemApi and is not in
+                // the public android.jar, so the capability flag is the only route.
                 .setCapabilities(PhoneAccount.CAPABILITY_SELF_MANAGED)
-                // VoIP only -- we must not claim the ability to place carrier calls.
-                .setIsSelfManaged(true)
                 .build()
             telecom.registerPhoneAccount(account)
         }.onFailure { AgentLog.w(TAG, "PhoneAccount registration failed: ${it.message}") }

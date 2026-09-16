@@ -78,7 +78,9 @@ object AudioDecoder {
                             val buffer = codec.getOutputBuffer(outIndex)!!
                             buffer.order(java.nio.ByteOrder.LITTLE_ENDIAN)
                             val shorts = ShortArray(info.size / 2)
-                            buffer.get(shorts)
+                            // ByteBuffer has get(ByteArray) but not get(ShortArray).
+                            // asShortBuffer() inherits the LITTLE_ENDIAN order set above.
+                            buffer.asShortBuffer().get(shorts)
                             for (s in shorts) out.add(s)
                             codec.releaseOutputBuffer(outIndex, false)
                         }

@@ -21,7 +21,9 @@ class VoIPConnection(
     private val address: Uri?,
     private val isIncoming: Boolean,
     private val onStateChange: (VoIPConnection, State) -> Unit = { _, _ -> },
-) : Connection(context, null) {
+// Connection's only public constructor is the no-arg one; the (Context, TelecomManager)
+// overload is @hide. The context is kept for the signalling layer, not for super().
+) : Connection() {
 
     enum class State { Ringing, Dialing, Active, Holding, Disconnected }
 

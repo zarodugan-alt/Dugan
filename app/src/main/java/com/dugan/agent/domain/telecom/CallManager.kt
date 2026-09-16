@@ -93,12 +93,13 @@ class CallManager @Inject constructor(
         }
         runCatching {
             val telecom = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
-            telecom.addNewOutgoingCall(uri, extras)
+            // addNewOutgoingCall is @SystemApi; placeCall is the public equivalent.
+            telecom.placeCall(uri, extras)
         }.onFailure { AgentLog.w(TAG, "placeVoipCall failed: ${it.message}") }
     }
 
     fun answer(callId: String?) {
-        controller.callById(callId)?.answer()
+        controller.callById(callId)?.answer(android.telecom.VideoProfile.STATE_AUDIO_ONLY)
     }
 
     fun endCall(callId: String?) {

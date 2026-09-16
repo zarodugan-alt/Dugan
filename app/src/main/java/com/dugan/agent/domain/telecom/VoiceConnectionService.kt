@@ -41,7 +41,7 @@ class VoiceConnectionService : ConnectionService() {
         request: ConnectionRequest?,
     ): Connection {
         val address = request?.address
-        val callId = request.extras.callId() ?: UUID.randomUUID().toString()
+        val callId = request?.extras?.callId() ?: UUID.randomUUID().toString()
         AgentLog.i(TAG, "onCreateIncomingConnection id=$callId address=$address")
 
         return newConnection(callId, address).apply { markRinging() }
@@ -52,7 +52,7 @@ class VoiceConnectionService : ConnectionService() {
         request: ConnectionRequest?,
     ): Connection {
         val address = request?.address
-        val callId = request.extras.callId() ?: UUID.randomUUID().toString()
+        val callId = request?.extras?.callId() ?: UUID.randomUUID().toString()
         AgentLog.i(TAG, "onCreateOutgoingConnection id=$callId address=$address")
 
         return newConnection(callId, address).apply { markDialing() }

@@ -520,7 +520,7 @@ class VoiceAgentOrchestrator @Inject constructor(
      */
     private suspend fun buildMessages(userText: String): List<ChatMessage> {
         val history = if (settings.prefixCaching) history.contextWindow() else emptyList()
-        return history.map { ChatMessage(it.speaker.role(), it.text) } + ChatMessage("user", userText)
+        return history.map { ChatMessage(it.speaker.chatRole(), it.text) } + ChatMessage("user", userText)
     }
 
     /**
@@ -602,7 +602,8 @@ class VoiceAgentOrchestrator @Inject constructor(
             }
 
         if (settings.ttsCaching && collected.isNotEmpty()) {
-            ttsCache.put(cacheKey, Pcm.concat(*collected.toTypedArray()))
+            // concat gives ShortArray; the cache stores raw PCM bytes.
+            ttsCache.put(cacheKey, Pcm.toBytes(Pcm.concat(*collected.toTypedArray())))
         }
     }
 

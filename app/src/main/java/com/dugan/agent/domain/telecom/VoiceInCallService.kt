@@ -1,6 +1,5 @@
 package com.dugan.agent.domain.telecom
 
-import com.dugan.agent.util.AgentLog
 import android.content.Intent
 import android.telecom.Call
 import android.telecom.InCallService
@@ -86,7 +85,7 @@ class VoiceInCallService : InCallService() {
             // The call may have been answered or hung up while we waited.
             if (call.state != Call.STATE_RINGING) return@launch
 
-            runCatching { call.answer() }
+            runCatching { call.answer(android.telecom.VideoProfile.STATE_AUDIO_ONLY) }
                 .onFailure { AgentLog.w(TAG, "auto-answer failed: ${it.message}") }
                 .onSuccess {
                     controller.updateLocal { it.copy(transport = CallTransport.Voip, agentHandling = true) }
@@ -110,8 +109,9 @@ class VoiceInCallService : InCallService() {
         }
     }
 
-    override fun onCallAudioStateChanged(call: Call, audioState: android.telecom.CallAudioState) {
-        super.onCallAudioStateChanged(call, audioState)
+    // InCallService's callback takes only the audio state, not the call.
+    override fun onCallAudioStateChanged(audioState: android.telecom.CallAudioState) {
+        super.onCallAudioStateChanged(audioState)
         controller.updateLocal {
             it.copy(
                 isMuted = audioState.isMuted,
@@ -130,10 +130,6 @@ class VoiceInCallService : InCallService() {
             controller.onCallAdded(idOf(call), call)
         }
 
-        override fun onDisconnected(call: Call, disconnectCause: android.telecom.DisconnectCause) {
-            controller.onCallRemoved(idOf(call))
-            callManager.onCallSetChanged()
-        }
     }
 
     /**

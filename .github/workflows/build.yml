@@ -74,9 +74,9 @@ jobs:
             echo
             echo '```'
             if [ -f build.log ]; then
-              grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 40
+              grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 200
               echo "----- last 60 lines -----"
-              tail -n 60 build.log
+              tail -n 25 build.log
             else
               echo "(no build.log produced -- failed before the Gradle invocation)"
             fi
@@ -163,9 +163,9 @@ jobs:
             echo
             echo '```'
             if [ -f build.log ]; then
-              grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 40
+              grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 200
               echo "----- last 60 lines -----"
-              tail -n 60 build.log
+              tail -n 25 build.log
             else
               echo "(no build.log produced -- failed before the Gradle invocation)"
             fi
@@ -265,9 +265,9 @@ jobs:
             echo
             echo '```'
             if [ -f build.log ]; then
-              grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 40
+              grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 200
               echo "----- last 60 lines -----"
-              tail -n 60 build.log
+              tail -n 25 build.log
             else
               echo "(no build.log produced -- failed before the Gradle invocation)"
             fi
@@ -357,9 +357,9 @@ jobs:
             echo
             echo '```'
             if [ -f build.log ]; then
-              grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 40
+              grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 200
               echo "----- last 60 lines -----"
-              tail -n 60 build.log
+              tail -n 25 build.log
             else
               echo "(no build.log produced -- failed before the Gradle invocation)"
             fi
@@ -466,9 +466,9 @@ jobs:
             echo
             echo '```'
             if [ -f build.log ]; then
-              grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 40
+              grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 200
               echo "----- last 60 lines -----"
-              tail -n 60 build.log
+              tail -n 25 build.log
             else
               echo "(no build.log produced -- failed before the Gradle invocation)"
             fi

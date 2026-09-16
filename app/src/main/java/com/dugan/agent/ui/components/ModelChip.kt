@@ -1,5 +1,7 @@
 package com.dugan.agent.ui.components
 
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -41,9 +43,11 @@ fun ProviderBadge(provider: ModelProvider, modifier: Modifier = Modifier) {
             } else {
                 MaterialTheme.colorScheme.onSecondaryContainer
             },
+            // Surface's content lambda is not a BoxScope, so Modifier.align is not
+            // available here -- centre with wrapContentSize instead.
             modifier = Modifier
-                .align(Alignment.Center)
-                .padding(0.dp),
+                .fillMaxSize()
+                .wrapContentSize(Alignment.Center),
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
     }
