@@ -55,7 +55,7 @@ fun MainScreen(
     val snackbar = remember { SnackbarHostState() }
 
     LaunchedEffect(Unit) {
-        viewModel.collectEvents { event ->
+        viewModel.agentEvents.collect { event ->
             val message = when (event) {
                 is com.dugan.agent.domain.orchestrator.AgentEvent.Failure -> event.message
                 is com.dugan.agent.domain.orchestrator.AgentEvent.AudioUnavailable -> event.reason

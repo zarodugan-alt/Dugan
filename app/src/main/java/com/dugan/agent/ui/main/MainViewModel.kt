@@ -16,6 +16,7 @@ import com.dugan.agent.domain.model.TranscriptEntry
 import com.dugan.agent.domain.orchestrator.AgentEvent
 import com.dugan.agent.domain.orchestrator.VoiceAgentOrchestrator
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -42,8 +43,6 @@ class MainViewModel @Inject constructor(
     val agentState: StateFlow<AgentState> = orchestrator.state
 
     val transcript: StateFlow<List<TranscriptEntry>> = orchestrator.transcript
-
-    val events = orchestrator.events
 
     val settings: StateFlow<DuganSettings> = settingsRepository.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DuganSettings())
@@ -107,9 +106,12 @@ class MainViewModel @Inject constructor(
 
     fun echoLayersActive(): Int = orchestrator.aecStatus().activeLayerCount
 
-    fun collectEvents(onEvent: (AgentEvent) -> Unit) {
-        viewModelScope.launch {
-            events.collect(onEvent)
-        }
-    }
+    /**
+     * One-shot UI events (failures, barge-in, missing keys).
+     *
+     * Exposed as a flow rather than collected internally: the consumer needs to
+     * suspend on SnackbarHostState.showSnackbar, and a collector launched in
+     * viewModelScope would survive recomposition and stack up duplicates.
+     */
+    val agentEvents: Flow<AgentEvent> = orchestrator.events
 }

@@ -70,6 +70,10 @@ KOTLIN_BUILTINS = {
     "IOException", "InterruptedException", "CancellationException",
     "Charsets", "Math", "Class", "System", "Runtime", "Thread", "Object", "Void",
     "AssetManager", "Process", "StrictMode", "Looper", "Handler", "Bundle",
+    # Members of Compose/Android scope receivers (BoxScope, ExposedDropdownMenuBoxScope,
+    # RowScope, ...) resolve at the call site without an import, which this checker
+    # cannot model.
+    "ExposedDropdownMenu", "Modifier", "Alignment",
     # kotlin.* default imports -- always in scope, never imported explicitly.
     "AnnotationRetention", "AnnotationTarget", "JvmSuppressWildcards", "JvmStatic",
     "Synchronized", "ClosedFloatingPointRange", "Comparable", "Lazy", "Nothing",

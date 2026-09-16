@@ -35,7 +35,10 @@ class OnboardingViewModel @Inject constructor(
     private val _keys = MutableStateFlow(ApiProvider.entries.associate { it.id to "" })
     val keys: StateFlow<Map<String, String>> = _keys.asStateFlow()
 
-    private val _results = MutableStateFlow(ApiProvider.entries.associate { it.id to KeyTestResult.Untested })
+    // Explicit type argument: seeded with Untested, so without it the flow infers
+    Map<String, KeyTestResult.Untested> and rejects Invalid/Testing/Valid.
+    private val _results: MutableStateFlow<Map<String, KeyTestResult>> =
+        MutableStateFlow(ApiProvider.entries.associate { it.id to KeyTestResult.Untested })
     val results: StateFlow<Map<String, KeyTestResult>> = _results.asStateFlow()
 
     private val _themeId = MutableStateFlow(AppTheme.CrimsonNoir.id)

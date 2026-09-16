@@ -38,6 +38,7 @@ import com.dugan.agent.domain.model.ListeningMode
 import com.dugan.agent.domain.model.Speaker
 import com.dugan.agent.domain.model.ThinkingLevel
 import com.dugan.agent.domain.model.TranscriptEntry
+import com.dugan.agent.domain.model.chatRole
 import com.dugan.agent.util.withRetry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
