@@ -61,12 +61,32 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: android-actions/setup-android@v3
+      # GitHub's ubuntu-latest image already ships the Android SDK with
+      # cmdline-tools on PATH, so no setup action is needed.
+      #
+      # android-actions/setup-android@v3 is deliberately NOT used: its bootstrap
+      # unconditionally runs `sdkmanager tools`, and Google removed the legacy
+      # "tools" package from the SDK repository, so the action now exits 1 on
+      # every run regardless of what the project does.
+      - name: Configure Android SDK
+        run: |
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          if [ ! -d "$SDK" ]; then
+            echo "::error::Android SDK not found at $SDK"
+            exit 1
+          fi
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_HOME=$RUNNER_TEMP/android-home" >> "$GITHUB_ENV"
+          echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "Android SDK at $SDK"
+          ls "$SDK"
 
       - name: Install SDK platform
         run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager --install "platforms;android-$COMPILE_SDK" "build-tools;$BUILD_TOOLS" "platform-tools"
+          yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses > /dev/null || true
+          sdkmanager --sdk_root="$ANDROID_HOME" --install \
+            "platforms;android-$COMPILE_SDK" "build-tools;$BUILD_TOOLS" "platform-tools"
 
       - uses: gradle/actions/setup-gradle@v4
         with:
@@ -101,12 +121,32 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: android-actions/setup-android@v3
+      # GitHub's ubuntu-latest image already ships the Android SDK with
+      # cmdline-tools on PATH, so no setup action is needed.
+      #
+      # android-actions/setup-android@v3 is deliberately NOT used: its bootstrap
+      # unconditionally runs `sdkmanager tools`, and Google removed the legacy
+      # "tools" package from the SDK repository, so the action now exits 1 on
+      # every run regardless of what the project does.
+      - name: Configure Android SDK
+        run: |
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          if [ ! -d "$SDK" ]; then
+            echo "::error::Android SDK not found at $SDK"
+            exit 1
+          fi
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_HOME=$RUNNER_TEMP/android-home" >> "$GITHUB_ENV"
+          echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "Android SDK at $SDK"
+          ls "$SDK"
 
       - name: Install SDK platform
         run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager --install "platforms;android-$COMPILE_SDK" "build-tools;$BUILD_TOOLS" "platform-tools"
+          yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses > /dev/null || true
+          sdkmanager --sdk_root="$ANDROID_HOME" --install \
+            "platforms;android-$COMPILE_SDK" "build-tools;$BUILD_TOOLS" "platform-tools"
 
       - uses: gradle/actions/setup-gradle@v4
         with:
@@ -154,12 +194,32 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: android-actions/setup-android@v3
+      # GitHub's ubuntu-latest image already ships the Android SDK with
+      # cmdline-tools on PATH, so no setup action is needed.
+      #
+      # android-actions/setup-android@v3 is deliberately NOT used: its bootstrap
+      # unconditionally runs `sdkmanager tools`, and Google removed the legacy
+      # "tools" package from the SDK repository, so the action now exits 1 on
+      # every run regardless of what the project does.
+      - name: Configure Android SDK
+        run: |
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          if [ ! -d "$SDK" ]; then
+            echo "::error::Android SDK not found at $SDK"
+            exit 1
+          fi
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_HOME=$RUNNER_TEMP/android-home" >> "$GITHUB_ENV"
+          echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "Android SDK at $SDK"
+          ls "$SDK"
 
       - name: Install SDK platform
         run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager --install "platforms;android-$COMPILE_SDK" "build-tools;$BUILD_TOOLS" "platform-tools"
+          yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses > /dev/null || true
+          sdkmanager --sdk_root="$ANDROID_HOME" --install \
+            "platforms;android-$COMPILE_SDK" "build-tools;$BUILD_TOOLS" "platform-tools"
 
       - uses: gradle/actions/setup-gradle@v4
         with:
@@ -197,12 +257,32 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: android-actions/setup-android@v3
+      # GitHub's ubuntu-latest image already ships the Android SDK with
+      # cmdline-tools on PATH, so no setup action is needed.
+      #
+      # android-actions/setup-android@v3 is deliberately NOT used: its bootstrap
+      # unconditionally runs `sdkmanager tools`, and Google removed the legacy
+      # "tools" package from the SDK repository, so the action now exits 1 on
+      # every run regardless of what the project does.
+      - name: Configure Android SDK
+        run: |
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          if [ ! -d "$SDK" ]; then
+            echo "::error::Android SDK not found at $SDK"
+            exit 1
+          fi
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_HOME=$RUNNER_TEMP/android-home" >> "$GITHUB_ENV"
+          echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "Android SDK at $SDK"
+          ls "$SDK"
 
       - name: Install SDK platform
         run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager --install "platforms;android-$COMPILE_SDK" "build-tools;$BUILD_TOOLS" "platform-tools"
+          yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses > /dev/null || true
+          sdkmanager --sdk_root="$ANDROID_HOME" --install \
+            "platforms;android-$COMPILE_SDK" "build-tools;$BUILD_TOOLS" "platform-tools"
 
       - name: Synthesise a placeholder google-services.json
         # Both application ids are listed because the debug variant carries a
