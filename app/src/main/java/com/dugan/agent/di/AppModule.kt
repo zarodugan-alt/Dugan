@@ -38,7 +38,10 @@ object DispatcherModule {
 
     @Provides
     @DefaultDispatcher
-    fun default(): CoroutineDispatcher = Dispatchers.Default
+    // Not `default()`: Dagger generates code from the @Provides method name and
+    // `default` is a Java reserved word, so KSP fails with
+    // "java.lang.IllegalArgumentException: not a valid name: default".
+    fun defaultDispatcher(): CoroutineDispatcher = Dispatchers.Default
 }
 
 @Module

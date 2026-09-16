@@ -153,6 +153,37 @@ def kotlin_files():
                     yield root, os.path.join(dirpath, f)
 
 
+JAVA_KEYWORDS = {
+    "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char", "class",
+    "const", "continue", "default", "do", "double", "else", "enum", "extends", "final",
+    "finally", "float", "for", "goto", "if", "implements", "import", "instanceof", "int",
+    "interface", "long", "native", "new", "package", "private", "protected", "public",
+    "return", "short", "static", "strictfp", "super", "switch", "synchronized", "this",
+    "throw", "throws", "transient", "try", "void", "volatile", "while",
+}
+
+
+def check_dagger_method_names(path, text, errors):
+    """KSP generates code from Dagger @Provides / @Binds method names.
+
+    Kotlin happily accepts `fun default()`, but `default` is a Java reserved word,
+    so KSP fails the build with
+        e: [ksp] java.lang.IllegalArgumentException: not a valid name: default
+    which costs a two-minute Gradle run to discover. Catch it here instead.
+    """
+    if not re.search(r"@(?:Provides|Binds|Multibinds|BindsInstance)\b", text):
+        return
+    rel = os.path.relpath(path, ROOT)
+    for i, line in enumerate(text.split("\n"), 1):
+        m = re.search(r"\bfun\s+`?([A-Za-z_]\w*)`?\s*\(", line)
+        if m and m.group(1) in JAVA_KEYWORDS:
+            errors.append(
+                f"{rel}:{i}: `fun {m.group(1)}()` is a Java reserved word and cannot "
+                f"be a Dagger @Provides/@Binds method name (KSP cannot generate it)"
+            )
+
+
+
 def main() -> int:
     files = list(kotlin_files())
     if not files:
@@ -318,6 +349,11 @@ def main() -> int:
                     xml.dom.minidom.parse(fp)
                 except Exception as exc:  # noqa: BLE001
                     errors.append(f"{os.path.relpath(fp, ROOT)}: malformed XML ({exc})")
+
+    # Dagger/KSP method-name validity -- cheap here, expensive to find in a build
+    for path in code:
+        check_dagger_method_names(path, code[path], errors)
+
 
     # unresolved capitalised identifiers -> warnings
     declared_names: set[str] = set()
