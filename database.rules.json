@@ -1,0 +1,48 @@
+{
+  "//": "Firebase Realtime Database rules for VoIP SIGNALLING ONLY. No audio media ever flows through here -- media is peer-to-peer WebRTC once the SDP/ICE exchange completes. Deploy with: firebase deploy --only database",
+  "rules": {
+    "calls": {
+      "$callId": {
+        "//participants": "Only the two people on the call may read or write it. Anonymous auth gives each device a stable uid with no account.",
+        ".read": "auth != null && (data.child('caller/uid').val() === auth.uid || data.child('callee/uid').val() === auth.uid)",
+        ".write": "auth != null && (data.child('caller/uid').val() === auth.uid || data.child('callee/uid').val() === auth.uid || !data.exists())",
+
+        "caller": {
+          "uid":         { ".validate": "newData.isString() && newData.val().length <= 128" },
+          "displayName": { ".validate": "newData.isString() && newData.val().length <= 64" }
+        },
+        "callee": {
+          "uid":         { ".validate": "newData.isString() && newData.val().length <= 128" },
+          "displayName": { ".validate": "newData.isString() && newData.val().length <= 64" }
+        },
+
+        "//sdp": "An SDP blob is a few KB; cap it so a client cannot use the signalling channel as free storage.",
+        "offer": {
+          "sdp":  { ".validate": "newData.isString() && newData.val().length <= 16384" },
+          "type": { ".validate": "newData.isString() && (newData.val() === 'offer' || newData.val() === 'answer')" }
+        },
+        "answer": {
+          "sdp":  { ".validate": "newData.isString() && newData.val().length <= 16384" },
+          "type": { ".validate": "newData.isString() && (newData.val() === 'offer' || newData.val() === 'answer')" }
+        },
+
+        "iceCandidates": {
+          "$candidateId": {
+            "candidate":     { ".validate": "newData.isString() && newData.val().length <= 1024" },
+            "sdpMid":        { ".validate": "newData.isString() && newData.val().length <= 32" },
+            "sdpMLineIndex": { ".validate": "newData.isNumber()" }
+          }
+        },
+
+        "status": {
+          ".validate": "newData.isString() && (newData.val() === 'ringing' || newData.val() === 'active' || newData.val() === 'ended' || newData.val() === 'failed')"
+        },
+
+        "//timestamp": "Millis since epoch. Used to expire unanswered calls -- the 5-minute window is enforced client-side and by a scheduled cleanup, because RTDB rules cannot read the clock.",
+        "timestamp": { ".validate": "newData.isNumber()" },
+
+        "$other": { ".validate": false }
+      }
+    }
+  }
+}

@@ -1,0 +1,577 @@
+name: Build
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+# A new push to the same branch supersedes the in-flight run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  # Needed by the "Report failure to the pull request" step. Runner logs are
+  # served from a host that is not always reachable, so a failing build writes
+  # its own error tail into the PR instead of relying on the log viewer.
+  pull-requests: write
+
+env:
+  # Pinned so the build does not drift when the runner image updates.
+  GRADLE_VERSION: '8.9'
+  COMPILE_SDK: '35'
+  BUILD_TOOLS: '35.0.0'
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Fast gate. No JVM, no Android SDK -- runs in seconds and catches the class of
+  # error (package/path mismatch, unresolved internal import, dangling manifest
+  # reference, version-catalog typo) that would otherwise cost a 5-minute build
+  # to discover.
+  # ---------------------------------------------------------------------------
+  static-analysis:
+    name: Static analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Check package paths, imports, manifest and version catalog
+        run: python3 tools/static_check.py
+
+      - name: Check every resource XML parses
+        run: |
+          fail=0
+          while IFS= read -r f; do
+            python3 -c "import xml.dom.minidom,sys; xml.dom.minidom.parse(sys.argv[1])" "$f" \
+              || { echo "MALFORMED: $f"; fail=1; }
+          done < <(find app/src/main -name '*.xml')
+          exit $fail
+
+  # ---------------------------------------------------------------------------
+  # Provisions the toolchain once and shares it via the Gradle cache.
+  # ---------------------------------------------------------------------------
+
+      # Runner logs are served from a host that is not always reachable, so a red
+      # job posts its own error tail here instead of relying on the log viewer.
+      - name: Report failure to the pull request
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JOB_NAME: ${{ github.job }}
+          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # Resolve the PR from the branch rather than github.event, because this
+          # workflow also runs on push -- where there is no pull_request payload.
+          PR_NUMBER=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$HEAD_BRANCH" \
+            --state open --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No open pull request for $HEAD_BRANCH; writing the report to the step log only."
+          fi
+          {
+            echo "### :x: `$JOB_NAME` failed"
+            echo
+            echo "[Full log]($RUN_URL)"
+            echo
+            echo '```'
+            # Test names alone are not enough to act on -- pull the assertion
+            # messages out of the JUnit XML, which is the detail the log omits.
+            # Shell-only on purpose: a nested heredoc would have to be re-indented
+            # to sit inside this YAML block scalar, and that is fragile.
+            for xml in app/build/test-results/*/*.xml; do
+              [ -f "$xml" ] || continue
+              sed -n 's/.*<failure message="\([^"]*\)".*/ASSERTION: \1/p' "$xml" | head -n 20
+              sed -n 's/.*<error message="\([^"]*\)".*/ERROR: \1/p' "$xml" | head -n 20
+            done
+            if [ -f build.log ]; then
+              grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 200
+              echo "----- last 60 lines -----"
+              tail -n 25 build.log
+            else
+              echo "(no build.log produced -- failed before the Gradle invocation)"
+            fi
+            echo '```'
+          } > /tmp/fail-body.md
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/fail-body.md
+          else
+            cat /tmp/fail-body.md
+          fi
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    needs: static-analysis
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # GitHub's ubuntu-latest image already ships the Android SDK with
+      # cmdline-tools on PATH, so no setup action is needed.
+      #
+      # android-actions/setup-android@v3 is deliberately NOT used: its bootstrap
+      # unconditionally runs `sdkmanager tools`, and Google removed the legacy
+      # "tools" package from the SDK repository, so the action now exits 1 on
+      # every run regardless of what the project does.
+      - name: Configure Android SDK
+        run: |
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          if [ ! -d "$SDK" ]; then
+            echo "::error::Android SDK not found at $SDK"
+            exit 1
+          fi
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_HOME=$RUNNER_TEMP/android-home" >> "$GITHUB_ENV"
+          echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "Android SDK at $SDK"
+          ls "$SDK"
+
+      - name: Install SDK platform
+        run: |
+          yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses > /dev/null || true
+          sdkmanager --sdk_root="$ANDROID_HOME" --install \
+            "platforms;android-$COMPILE_SDK" "build-tools;$BUILD_TOOLS" "platform-tools"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      # Configuration cache is off in CI: KSP + Hilt round-trips are the usual
+      # source of false failures there, and it saves nothing on a cold runner.
+      - name: Run JVM unit tests
+        run: |
+          gradle testDebugUnitTest --no-configuration-cache --stacktrace 2>&1 | tee build.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-report
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Debug APK. This is the artifact you sideload.
+  # ---------------------------------------------------------------------------
+
+      # Runner logs are served from a host that is not always reachable, so a red
+      # job posts its own error tail here instead of relying on the log viewer.
+      - name: Report failure to the pull request
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JOB_NAME: ${{ github.job }}
+          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # Resolve the PR from the branch rather than github.event, because this
+          # workflow also runs on push -- where there is no pull_request payload.
+          PR_NUMBER=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$HEAD_BRANCH" \
+            --state open --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No open pull request for $HEAD_BRANCH; writing the report to the step log only."
+          fi
+          {
+            echo "### :x: `$JOB_NAME` failed"
+            echo
+            echo "[Full log]($RUN_URL)"
+            echo
+            echo '```'
+            # Test names alone are not enough to act on -- pull the assertion
+            # messages out of the JUnit XML, which is the detail the log omits.
+            # Shell-only on purpose: a nested heredoc would have to be re-indented
+            # to sit inside this YAML block scalar, and that is fragile.
+            for xml in app/build/test-results/*/*.xml; do
+              [ -f "$xml" ] || continue
+              sed -n 's/.*<failure message="\([^"]*\)".*/ASSERTION: \1/p' "$xml" | head -n 20
+              sed -n 's/.*<error message="\([^"]*\)".*/ERROR: \1/p' "$xml" | head -n 20
+            done
+            if [ -f build.log ]; then
+              grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 200
+              echo "----- last 60 lines -----"
+              tail -n 25 build.log
+            else
+              echo "(no build.log produced -- failed before the Gradle invocation)"
+            fi
+            echo '```'
+          } > /tmp/fail-body.md
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/fail-body.md
+          else
+            cat /tmp/fail-body.md
+          fi
+  assemble-debug:
+    name: Assemble debug APK
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # GitHub's ubuntu-latest image already ships the Android SDK with
+      # cmdline-tools on PATH, so no setup action is needed.
+      #
+      # android-actions/setup-android@v3 is deliberately NOT used: its bootstrap
+      # unconditionally runs `sdkmanager tools`, and Google removed the legacy
+      # "tools" package from the SDK repository, so the action now exits 1 on
+      # every run regardless of what the project does.
+      - name: Configure Android SDK
+        run: |
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          if [ ! -d "$SDK" ]; then
+            echo "::error::Android SDK not found at $SDK"
+            exit 1
+          fi
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_HOME=$RUNNER_TEMP/android-home" >> "$GITHUB_ENV"
+          echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "Android SDK at $SDK"
+          ls "$SDK"
+
+      - name: Install SDK platform
+        run: |
+          yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses > /dev/null || true
+          sdkmanager --sdk_root="$ANDROID_HOME" --install \
+            "platforms;android-$COMPILE_SDK" "build-tools;$BUILD_TOOLS" "platform-tools"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Build
+        run: |
+          gradle assembleDebug --no-configuration-cache --stacktrace 2>&1 | tee build.log
+          exit "${PIPESTATUS[0]}"
+
+      - name: Publish the Gradle wrapper for local use
+        # The wrapper JAR is not committed (binary), so generate it here and ship
+        # it with the APK. Unzip, then `./gradlew` works locally with no Gradle
+        # installed.
+        run: |
+          gradle wrapper --gradle-version "$GRADLE_VERSION" --no-configuration-cache
+          cp gradlew gradle/wrapper/gradle-wrapper.jar gradle/wrapper/gradle-wrapper.properties dist/ 2>/dev/null || {
+            mkdir -p dist/wrapper
+            cp gradlew dist/
+            cp gradle/wrapper/gradle-wrapper.jar gradle/wrapper/gradle-wrapper.properties dist/wrapper/
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dugan-debug-apk
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            dist/
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Release APK. Worth building even though it is signed with the debug key: it
+  # is the only job that exercises R8, so it is what proves proguard-rules.pro
+  # actually keeps the serializers, Room DAOs, Telecom services and Hilt
+  # generated classes.
+  # ---------------------------------------------------------------------------
+
+      # Runner logs are served from a host that is not always reachable, so a red
+      # job posts its own error tail here instead of relying on the log viewer.
+      - name: Report failure to the pull request
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JOB_NAME: ${{ github.job }}
+          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # Resolve the PR from the branch rather than github.event, because this
+          # workflow also runs on push -- where there is no pull_request payload.
+          PR_NUMBER=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$HEAD_BRANCH" \
+            --state open --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No open pull request for $HEAD_BRANCH; writing the report to the step log only."
+          fi
+          {
+            echo "### :x: `$JOB_NAME` failed"
+            echo
+            echo "[Full log]($RUN_URL)"
+            echo
+            echo '```'
+            # Test names alone are not enough to act on -- pull the assertion
+            # messages out of the JUnit XML, which is the detail the log omits.
+            # Shell-only on purpose: a nested heredoc would have to be re-indented
+            # to sit inside this YAML block scalar, and that is fragile.
+            for xml in app/build/test-results/*/*.xml; do
+              [ -f "$xml" ] || continue
+              sed -n 's/.*<failure message="\([^"]*\)".*/ASSERTION: \1/p' "$xml" | head -n 20
+              sed -n 's/.*<error message="\([^"]*\)".*/ERROR: \1/p' "$xml" | head -n 20
+            done
+            if [ -f build.log ]; then
+              grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 200
+              echo "----- last 60 lines -----"
+              tail -n 25 build.log
+            else
+              echo "(no build.log produced -- failed before the Gradle invocation)"
+            fi
+            echo '```'
+          } > /tmp/fail-body.md
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/fail-body.md
+          else
+            cat /tmp/fail-body.md
+          fi
+  assemble-release:
+    name: Assemble release APK (R8)
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # GitHub's ubuntu-latest image already ships the Android SDK with
+      # cmdline-tools on PATH, so no setup action is needed.
+      #
+      # android-actions/setup-android@v3 is deliberately NOT used: its bootstrap
+      # unconditionally runs `sdkmanager tools`, and Google removed the legacy
+      # "tools" package from the SDK repository, so the action now exits 1 on
+      # every run regardless of what the project does.
+      - name: Configure Android SDK
+        run: |
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          if [ ! -d "$SDK" ]; then
+            echo "::error::Android SDK not found at $SDK"
+            exit 1
+          fi
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_HOME=$RUNNER_TEMP/android-home" >> "$GITHUB_ENV"
+          echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "Android SDK at $SDK"
+          ls "$SDK"
+
+      - name: Install SDK platform
+        run: |
+          yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses > /dev/null || true
+          sdkmanager --sdk_root="$ANDROID_HOME" --install \
+            "platforms;android-$COMPILE_SDK" "build-tools;$BUILD_TOOLS" "platform-tools"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Build (minified + resource-shrunk)
+        run: |
+          gradle assembleRelease --no-configuration-cache --stacktrace 2>&1 | tee build.log
+          exit "${PIPESTATUS[0]}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dugan-release-apk
+          path: |
+            app/build/outputs/apk/release/*.apk
+            app/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # The opt-in VoIP signalling source set. Not covered by the jobs above because
+  # src/firebase is only added to the compilation under -Pdugan.firebase=true, so
+  # without this job that code could rot unnoticed.
+  #
+  # google-services.json is synthesised here: it is a per-developer secret and is
+  # deliberately not committed. Replace with a real one before shipping VoIP.
+  # ---------------------------------------------------------------------------
+
+      # Runner logs are served from a host that is not always reachable, so a red
+      # job posts its own error tail here instead of relying on the log viewer.
+      - name: Report failure to the pull request
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JOB_NAME: ${{ github.job }}
+          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # Resolve the PR from the branch rather than github.event, because this
+          # workflow also runs on push -- where there is no pull_request payload.
+          PR_NUMBER=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$HEAD_BRANCH" \
+            --state open --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No open pull request for $HEAD_BRANCH; writing the report to the step log only."
+          fi
+          {
+            echo "### :x: `$JOB_NAME` failed"
+            echo
+            echo "[Full log]($RUN_URL)"
+            echo
+            echo '```'
+            # Test names alone are not enough to act on -- pull the assertion
+            # messages out of the JUnit XML, which is the detail the log omits.
+            # Shell-only on purpose: a nested heredoc would have to be re-indented
+            # to sit inside this YAML block scalar, and that is fragile.
+            for xml in app/build/test-results/*/*.xml; do
+              [ -f "$xml" ] || continue
+              sed -n 's/.*<failure message="\([^"]*\)".*/ASSERTION: \1/p' "$xml" | head -n 20
+              sed -n 's/.*<error message="\([^"]*\)".*/ERROR: \1/p' "$xml" | head -n 20
+            done
+            if [ -f build.log ]; then
+              grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 200
+              echo "----- last 60 lines -----"
+              tail -n 25 build.log
+            else
+              echo "(no build.log produced -- failed before the Gradle invocation)"
+            fi
+            echo '```'
+          } > /tmp/fail-body.md
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/fail-body.md
+          else
+            cat /tmp/fail-body.md
+          fi
+  assemble-firebase:
+    name: Assemble with Firebase signalling
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # GitHub's ubuntu-latest image already ships the Android SDK with
+      # cmdline-tools on PATH, so no setup action is needed.
+      #
+      # android-actions/setup-android@v3 is deliberately NOT used: its bootstrap
+      # unconditionally runs `sdkmanager tools`, and Google removed the legacy
+      # "tools" package from the SDK repository, so the action now exits 1 on
+      # every run regardless of what the project does.
+      - name: Configure Android SDK
+        run: |
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          if [ ! -d "$SDK" ]; then
+            echo "::error::Android SDK not found at $SDK"
+            exit 1
+          fi
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_HOME=$RUNNER_TEMP/android-home" >> "$GITHUB_ENV"
+          echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "Android SDK at $SDK"
+          ls "$SDK"
+
+      - name: Install SDK platform
+        run: |
+          yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses > /dev/null || true
+          sdkmanager --sdk_root="$ANDROID_HOME" --install \
+            "platforms;android-$COMPILE_SDK" "build-tools;$BUILD_TOOLS" "platform-tools"
+
+      - name: Synthesise a placeholder google-services.json
+        # Both application ids are listed because the debug variant carries a
+        # `.debug` suffix and the google-services plugin matches on package name.
+        run: |
+          cat > app/google-services.json <<'JSON'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "dugan-ci-placeholder",
+              "storage_bucket": "dugan-ci-placeholder.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+                  "android_client_info": { "package_name": "com.dugan.agent" }
+                },
+                "oauth_client": [],
+                "api_key": [ { "current_key": "AIzaSyDUMMYDUMMYDUMMYDUMMYDUMMYDUMMYDUMMY0" } ],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              },
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000000001",
+                  "android_client_info": { "package_name": "com.dugan.agent.debug" }
+                },
+                "oauth_client": [],
+                "api_key": [ { "current_key": "AIzaSyDUMMYDUMMYDUMMYDUMMYDUMMYDUMMYDUMMY0" } ],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          JSON
+          python3 -c "import json;json.load(open('app/google-services.json'));print('google-services.json: valid')"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Build with the firebase source set
+        run: gradle assembleDebug -Pdugan.firebase=true --no-configuration-cache --stacktrace
+
+      # Runner logs are served from a host that is not always reachable, so a red
+      # job posts its own error tail here instead of relying on the log viewer.
+      - name: Report failure to the pull request
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JOB_NAME: ${{ github.job }}
+          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # Resolve the PR from the branch rather than github.event, because this
+          # workflow also runs on push -- where there is no pull_request payload.
+          PR_NUMBER=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$HEAD_BRANCH" \
+            --state open --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No open pull request for $HEAD_BRANCH; writing the report to the step log only."
+          fi
+          {
+            echo "### :x: `$JOB_NAME` failed"
+            echo
+            echo "[Full log]($RUN_URL)"
+            echo
+            echo '```'
+            # Test names alone are not enough to act on -- pull the assertion
+            # messages out of the JUnit XML, which is the detail the log omits.
+            # Shell-only on purpose: a nested heredoc would have to be re-indented
+            # to sit inside this YAML block scalar, and that is fragile.
+            for xml in app/build/test-results/*/*.xml; do
+              [ -f "$xml" ] || continue
+              sed -n 's/.*<failure message="\([^"]*\)".*/ASSERTION: \1/p' "$xml" | head -n 20
+              sed -n 's/.*<error message="\([^"]*\)".*/ERROR: \1/p' "$xml" | head -n 20
+            done
+            if [ -f build.log ]; then
+              grep -E "^e: |error:|FAILURE:|What went wrong|FAILED$|Execution failed|Caused by" build.log | head -n 200
+              echo "----- last 60 lines -----"
+              tail -n 25 build.log
+            else
+              echo "(no build.log produced -- failed before the Gradle invocation)"
+            fi
+            echo '```'
+          } > /tmp/fail-body.md
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/fail-body.md
+          else
+            cat /tmp/fail-body.md
+          fi

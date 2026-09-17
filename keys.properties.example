@@ -1,0 +1,7 @@
+# Optional. Copy to `keys.properties` (gitignored) to seed a DEBUG build's
+# EncryptedSharedPreferences on first run. Release builds ignore this file.
+#
+# The app never requires it: you can enter all three keys in Onboarding instead.
+GROQ_API_KEY=
+GEMINI_API_KEY=
+UNREAL_SPEECH_API_KEY=
