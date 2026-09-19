@@ -64,9 +64,19 @@ device talks to each provider directly.
 the encrypted vault, works offline, and costs nothing. Test additionally spends
 one request proving the key is live — the smallest call each provider accepts.
 Requiring a green Test before a key could be stored would make the app unusable
-offline and burn quota on every edit. Keys are validated structurally first
-(Groq must start `gsk_`, Gemini `AIza` or `ya29.`), masked in every UI surface,
-and never written to a log line.
+offline and burn quota on every edit. Keys are masked in every UI surface and
+never written to a log line.
+
+**Format checks are advisory, not blocking.** A pasted key is only refused
+locally when it cannot possibly be one: blank, implausibly short, containing a
+space or line break, or another provider's key dropped into the wrong field. An
+*unrecognised prefix* is not a rejection — Test is what decides. Google
+re-issued Gemini keys from the `AIza` Standard format to the `AQ.` Auth format
+in mid-2026, and every tool that had welded `AIza` into a validator started
+refusing valid keys overnight. Each field states the shape it expects
+(`ApiProvider.keyHint`), whitespace is stripped on paste, and Gemini is called
+with the key in the `x-goog-api-key` header rather than a `?key=` query param,
+so a secret never ends up in a URL.
 
 **Where they live:** `EncryptedSharedPreferences` (`byok_vault.xml`) under an
 AES256-GCM master key held by the Android Keystore. The file is excluded from

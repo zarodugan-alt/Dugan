@@ -83,6 +83,17 @@ class GeminiLlmClient @Inject constructor(
     private fun key(): String = vault.read(ApiProvider.Gemini)
         ?: throw ApiException(401, provider, "Gemini API key not configured")
 
+    /**
+     * Sends the key in `x-goog-api-key` rather than as a `?key=` query param.
+     *
+     * Both are documented, but the header keeps the secret out of URLs — which
+     * means out of proxy logs, crash reporters and any `okhttp` logging
+     * interceptor — and it needs no percent-encoding, so a key containing
+     * characters that are awkward in a query string still arrives intact.
+     */
+    private fun Request.Builder.withApiKey(): Request.Builder =
+        header(GEMINI_KEY_HEADER, key())
+
     private fun buildBody(
         messages: List<ChatMessage>,
         systemPrompt: String,
@@ -104,9 +115,10 @@ class GeminiLlmClient @Inject constructor(
         systemPrompt: String,
         maxOutputTokens: Int,
     ): Flow<String> = callbackFlow {
-        val url = ApiEndpoints.geminiStream(model.wireId) + "?alt=sse&key=${key()}"
+        val url = ApiEndpoints.geminiStream(model.wireId) + "?alt=sse"
         val request = Request.Builder()
             .url(url)
+            .withApiKey()
             .header("Content-Type", "application/json")
             .post(json.encodeToString(GeminiRequestBody.serializer(), buildBody(messages, systemPrompt, thinkingLevel, maxOutputTokens)).toRequestBody(JSON_MEDIA))
             .build()
@@ -150,9 +162,10 @@ class GeminiLlmClient @Inject constructor(
         systemPrompt: String,
         maxOutputTokens: Int,
     ): String = withContext(Dispatchers.IO) {
-        val url = ApiEndpoints.geminiGenerate(model.wireId) + "?key=${key()}"
+        val url = ApiEndpoints.geminiGenerate(model.wireId)
         val request = Request.Builder()
             .url(url)
+            .withApiKey()
             .header("Content-Type", "application/json")
             .post(
                 json.encodeToString(
@@ -180,7 +193,8 @@ class GeminiLlmClient @Inject constructor(
     override suspend fun ping(model: AgentModel): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             val request = Request.Builder()
-                .url(ApiEndpoints.GEMINI_MODELS_PROBE + "?key=${key()}&pageSize=1")
+                .url(ApiEndpoints.GEMINI_MODELS_PROBE + "?pageSize=1")
+                .withApiKey()
                 .build()
             probe.newCall(request).execute().use { resp ->
                 if (!resp.isSuccessful) {
@@ -192,6 +206,9 @@ class GeminiLlmClient @Inject constructor(
 
     private companion object {
         val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
+
+        /** Documented header for a Gemini API key, `AIza` or `AQ.` alike. */
+        const val GEMINI_KEY_HEADER = "x-goog-api-key"
     }
 }
 

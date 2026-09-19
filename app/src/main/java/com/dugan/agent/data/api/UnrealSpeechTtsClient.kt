@@ -25,8 +25,10 @@ private data class UnrealTtsRequest(
     val voiceId: String,
     val speed: Float = 0f,
     val pitch: Float = 1f,
-    val bitrate: Int = 128,
-    @SerialName("responseFormat") val responseFormat: String = "mp3",
+    /** Documented as a suffixed string ("320k", "192k", "128k", ...), not a number. */
+    val bitrate: String = "128k",
+    /** `libmp3lame` is the documented default and what [AudioDecoder] expects back. */
+    @SerialName("codec") val codec: String = "libmp3lame",
 )
 
 /**
@@ -66,7 +68,7 @@ class UnrealSpeechTtsClient @Inject constructor(
 
         val body = json.encodeToString(
             UnrealTtsRequest.serializer(),
-            UnrealTtsRequest(text = text, voiceId = voiceId, speed = speed),
+            UnrealTtsRequest(text = text, voiceId = voiceFor(voiceId), speed = speed),
         ).toRequestBody(JSON_MEDIA)
 
         val request = Request.Builder()
@@ -116,9 +118,11 @@ class UnrealSpeechTtsClient @Inject constructor(
         runCatching {
             val key = vault.read(ApiProvider.UnrealSpeech)
                 ?: throw ApiException(401, provider, "Unreal Speech key not configured")
+            // Shortest accepted request. Uses a voice the endpoint documents so
+            // the probe can only fail on the credential, not on the parameters.
             val body = json.encodeToString(
                 UnrealTtsRequest.serializer(),
-                UnrealTtsRequest(text = "Hi.", voiceId = "Aria"),
+                UnrealTtsRequest(text = "Hi.", voiceId = DEFAULT_VOICE),
             ).toRequestBody(JSON_MEDIA)
             val request = Request.Builder()
                 .url(ApiEndpoints.UNREAL_STREAM)
@@ -133,7 +137,20 @@ class UnrealSpeechTtsClient @Inject constructor(
         }
     }
 
+    /**
+     * Unreal Speech only knows its own five voices, while the rest of the app
+     * defaults to an Edge TTS voice name ("Aria"). An unrecognised id comes back
+     * as a 400 on every request, which the user experiences as "the key does not
+     * work". Map anything unknown onto the documented default instead.
+     */
+    private fun voiceFor(voiceId: String): String =
+        VOICES.firstOrNull { it.equals(voiceId, ignoreCase = true) } ?: DEFAULT_VOICE
+
     private companion object {
         val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
+
+        /** The only voices `/stream` documents. */
+        val VOICES = listOf("Scarlett", "Dan", "Liv", "Will", "Amy")
+        const val DEFAULT_VOICE = "Scarlett"
     }
 }

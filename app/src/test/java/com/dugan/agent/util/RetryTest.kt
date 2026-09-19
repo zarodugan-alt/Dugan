@@ -126,6 +126,13 @@ class AgentLogRedactTest {
     }
 
     @Test
+    fun `redacts the AQ auth key format gemini issues now`() {
+        val out = AgentLog.redact("probe failed with AQ.Ab8SAMPLEKEY00000000000000000000000000000000000000")
+        assertTrue("key leaked: $out", !out.contains("SAMPLEKEY0000000000"))
+        assertTrue(out.contains("<redacted>"))
+    }
+
+    @Test
     fun `leaves ordinary text alone`() {
         val message = "turn 4 completed in 312ms with 2 sentences"
         assertEquals(message, AgentLog.redact(message))

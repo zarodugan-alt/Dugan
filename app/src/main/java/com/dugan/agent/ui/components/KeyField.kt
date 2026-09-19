@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ErrorOutline
@@ -31,11 +32,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.dugan.agent.domain.model.ApiProvider
 import com.dugan.agent.domain.model.KeyTestResult
+import com.dugan.agent.domain.model.sanitizeKey
 
 /**
  * One BYOK key.
@@ -94,13 +98,26 @@ fun KeyField(
 
             OutlinedTextField(
                 value = value,
-                onValueChange = onValueChange,
+                // Keys never contain whitespace, clipboards routinely do. Scrub
+                // it at the point of entry so a paste lands exactly as the
+                // provider issued it instead of failing validation on a
+                // trailing newline the user cannot even see.
+                onValueChange = { onValueChange(sanitizeKey(it)) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 label = { Text("Paste key") },
+                // Tells the user what shape to expect before they paste, and
+                // falls back to the masked key when one is already stored.
                 placeholder = {
-                    Text(storedMask ?: "gsk_… / AIza… / …")
+                    Text(storedMask ?: provider.keyHint)
                 },
+                keyboardOptions = KeyboardOptions(
+                    // No autocorrect, no predictive text, no capitalisation on
+                    // a token that is case-sensitive and full of symbols.
+                    keyboardType = KeyboardType.Password,
+                    autoCorrectEnabled = false,
+                    imeAction = ImeAction.Done,
+                ),
                 visualTransformation = if (revealed) {
                     VisualTransformation.None
                 } else {
@@ -122,7 +139,7 @@ fun KeyField(
                         storedMask != null ->
                             Text("Stored: $storedMask")
                         else ->
-                            Text("Not configured")
+                            Text("Not configured · paste your ${provider.keyHint}")
                     }
                 },
             )

@@ -2,8 +2,9 @@ package com.dugan.agent.data.repository
 
 import com.dugan.agent.data.local.KeyVault
 import com.dugan.agent.domain.model.ApiProvider
-import com.dugan.agent.domain.model.looksLikeKey
+import com.dugan.agent.domain.model.keyProblem
 import com.dugan.agent.domain.model.maskKey
+import com.dugan.agent.domain.model.sanitizeKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -20,21 +21,20 @@ class KeyRepository @Inject constructor(
 
     fun allConfigured(): Boolean = vault.hasAllRequired()
 
-    /** @return a human-readable reason when the key is structurally wrong, else null. */
-    fun validate(provider: ApiProvider, key: String): String? = when {
-        key.isBlank() -> "Key is empty"
-        !looksLikeKey(provider, key) ->
-            if (provider.expectedKeyPrefixes.isEmpty()) {
-                "Key looks too short"
-            } else {
-                "Key should start with ${provider.expectedKeyPrefixes.joinToString(" or ")}"
-            }
-        else -> null
-    }
+    /**
+     * @return a human-readable reason when [key] cannot be a [provider] key,
+     *   else null.
+     *
+     * An unrecognised prefix is deliberately *not* a failure. The Test probe is
+     * what decides whether a key is live, so a provider re-branding its keys
+     * never locks a user out of their own account.
+     */
+    fun validate(provider: ApiProvider, key: String): String? = keyProblem(provider, sanitizeKey(key))
 
     fun save(provider: ApiProvider, key: String): Boolean {
-        if (validate(provider, key) != null) return false
-        vault.write(provider, key)
+        val cleaned = sanitizeKey(key)
+        if (keyProblem(provider, cleaned) != null) return false
+        vault.write(provider, cleaned)
         return true
     }
 

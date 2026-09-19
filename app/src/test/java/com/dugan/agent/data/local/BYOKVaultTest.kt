@@ -2,10 +2,13 @@ package com.dugan.agent.data.local
 
 import com.dugan.agent.domain.model.ApiProvider
 import com.dugan.agent.domain.model.KeyTestResult
+import com.dugan.agent.domain.model.keyProblem
 import com.dugan.agent.domain.model.looksLikeKey
 import com.dugan.agent.domain.model.maskKey
+import com.dugan.agent.domain.model.sanitizeKey
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -91,16 +94,32 @@ class BYOKVaultTest {
     // -- Structural validation ----------------------------------------------
 
     @Test
-    fun `groq keys must start with the gsk_ prefix`() {
+    fun `groq accepts its own prefix`() {
         assertTrue(looksLikeKey(ApiProvider.Groq, "gsk_0123456789abcdef"))
-        assertFalse(looksLikeKey(ApiProvider.Groq, "sk-0123456789abcdef"))
     }
 
     @Test
-    fun `gemini accepts both current key shapes`() {
+    fun `gemini accepts the AQ auth key that AI Studio issues now`() {
+        // Regression: Google moved AI Studio from `AIza` Standard keys to `AQ.`
+        // Auth keys. A validator pinned to the old prefix rejected every new
+        // key the user pasted, which is why the field looked broken.
+        val authKey = "AQ.Ab8SAMPLEKEY00000000000000000000000000000000000000"
+        assertTrue(looksLikeKey(ApiProvider.Gemini, authKey))
+        assertNull(keyProblem(ApiProvider.Gemini, authKey))
+    }
+
+    @Test
+    fun `gemini still accepts the legacy standard key shapes`() {
         assertTrue(looksLikeKey(ApiProvider.Gemini, "AIzaSyD-0123456789abcdef"))
         assertTrue(looksLikeKey(ApiProvider.Gemini, "ya29.a0AfH6SM0123456789"))
-        assertFalse(looksLikeKey(ApiProvider.Gemini, "gsk_0123456789abcdef"))
+    }
+
+    @Test
+    fun `an unrecognised prefix is not a rejection, the probe decides`() {
+        // Providers re-brand their tokens without notice. Anything long and
+        // space-free is worth one request rather than a local veto.
+        assertTrue(looksLikeKey(ApiProvider.Groq, "sk-0123456789abcdef"))
+        assertNull(keyProblem(ApiProvider.Groq, "sk-0123456789abcdef"))
     }
 
     @Test
@@ -113,6 +132,53 @@ class BYOKVaultTest {
     fun `keys containing whitespace are rejected`() {
         assertFalse(looksLikeKey(ApiProvider.Groq, "gsk_0123 456789abcdef"))
         assertFalse(looksLikeKey(ApiProvider.Groq, "gsk_0123\n456789abcdef"))
+        assertTrue(keyProblem(ApiProvider.Groq, "gsk_0123 456789abcdef")!!.contains("space or line break"))
+    }
+
+    @Test
+    fun `another provider's key pasted into the wrong field is caught locally`() {
+        val problem = keyProblem(ApiProvider.Gemini, "gsk_0123456789abcdef")
+        assertNotNull(problem)
+        assertTrue("message did not name the right provider: $problem", problem!!.contains("Groq"))
+
+        assertTrue(keyProblem(ApiProvider.Groq, "AQ.Ab8SAMPLEKEY00000000000000000000000000000000000000")!!.contains("Gemini"))
+    }
+
+    @Test
+    fun `an empty key reports empty rather than too short`() {
+        assertEquals("Key is empty", keyProblem(ApiProvider.Groq, "   "))
+    }
+
+    // -- Paste normalisation ------------------------------------------------
+
+    @Test
+    fun `paste noise is stripped so a valid key survives the clipboard`() {
+        val pasted = " AQ.Ab8SAMPLEKEY00000000000000000000000000000000000000\r\n"
+        val cleaned = sanitizeKey(pasted)
+        assertEquals("AQ.Ab8SAMPLEKEY00000000000000000000000000000000000000", cleaned)
+        assertNull(keyProblem(ApiProvider.Gemini, cleaned))
+    }
+
+    @Test
+    fun `invisible characters are removed by sanitising`() {
+        assertEquals("gsk_0123456789abcdef", sanitizeKey("gsk_0123\u200B456789abcdef\uFEFF"))
+        assertTrue(looksLikeKey(ApiProvider.Groq, sanitizeKey("gsk_0123\u200B456789abcdef\uFEFF")))
+    }
+
+    @Test
+    fun `sanitising leaves a clean key untouched`() {
+        val key = "AQ.Ab8SAMPLEKEY00000000000000000000000000000000000000"
+        assertEquals(key, sanitizeKey(key))
+    }
+
+    // -- Provider metadata --------------------------------------------------
+
+    @Test
+    fun `every provider tells the field what shape to expect`() {
+        ApiProvider.entries.forEach { provider ->
+            assertTrue("${provider.id} has no key hint", provider.keyHint.isNotBlank())
+        }
+        assertTrue(ApiProvider.Gemini.keyHint.contains("AQ."))
     }
 
     @Test

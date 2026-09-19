@@ -15,7 +15,17 @@ import java.util.Locale
 object AgentLog {
 
     private const val MAX_LINES = 800
-    private const val KEY_SHAPE = "\\b(?:gsk_|AIza|ya29\\.)[A-Za-z0-9_\\-]{8,}\\b"
+
+    /**
+     * Prefixes we can recognise well enough to scrub. Gemini gained the `AQ.`
+     * Auth-key format in 2026 alongside the legacy `AIza` / `ya29.` Standard
+     * keys, so all three are listed -- a validator that only knew the old
+     * shapes is how a live key ends up in a shared log dump.
+     *
+     * Unreal Speech publishes no prefix, so its tokens cannot be matched by
+     * shape; nothing about them is ever logged.
+     */
+    private const val KEY_SHAPE = "\\b(?:gsk_|AIza|ya29\\.|AQ\\.)[A-Za-z0-9_\\-]{8,}\\b"
 
     private val lines = ArrayDeque<String>()
     private val format = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
