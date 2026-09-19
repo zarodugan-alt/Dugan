@@ -91,8 +91,9 @@ class BYOKVaultTest {
     // -- Structural validation ----------------------------------------------
 
     @Test
-    fun `groq keys must start with the gsk_ prefix`() {
+    fun `groq keys must start with the gsk_ or groq_ prefix`() {
         assertTrue(looksLikeKey(ApiProvider.Groq, "gsk_0123456789abcdef"))
+        assertTrue(looksLikeKey(ApiProvider.Groq, "groq_0123456789abcdef"))
         assertFalse(looksLikeKey(ApiProvider.Groq, "sk-0123456789abcdef"))
     }
 

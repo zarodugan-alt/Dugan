@@ -16,7 +16,7 @@ enum class ApiProvider(
         emoji = "🎤",
         role = "Speech-to-Text",
         signupUrl = "https://console.groq.com/keys",
-        expectedKeyPrefixes = listOf("gsk_"),
+        expectedKeyPrefixes = listOf("gsk_", "groq_"),
     ),
     Gemini(
         id = "gemini",
