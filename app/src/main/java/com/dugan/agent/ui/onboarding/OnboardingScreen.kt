@@ -68,6 +68,7 @@ fun OnboardingScreen(
     val step by viewModel.step.collectAsStateWithLifecycle()
     val keys by viewModel.keys.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
+    val advisories by viewModel.advisories.collectAsStateWithLifecycle()
     val themeId by viewModel.themeId.collectAsStateWithLifecycle()
 
     val permissionState = rememberMultiplePermissionsState(PERMISSIONS.map { it.permission })
@@ -120,6 +121,7 @@ fun OnboardingScreen(
                     0 -> KeysStep(
                         keys = keys,
                         results = results,
+                        advisories = advisories,
                         onKeyChange = viewModel::onKeyChange,
                         onTest = viewModel::test,
                         canContinue = viewModel.allKeysValid,
@@ -151,6 +153,7 @@ fun OnboardingScreen(
 private fun KeysStep(
     keys: Map<String, String>,
     results: Map<String, KeyTestResult>,
+    advisories: Map<String, String?>,
     onKeyChange: (ApiProvider, String) -> Unit,
     onTest: (ApiProvider) -> Unit,
     canContinue: Boolean,
@@ -171,7 +174,9 @@ private fun KeysStep(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            "You need three keys. All three have a usable free tier.",
+            "You need three keys. All three have a usable free tier. Paste one and it is " +
+                "checked against the provider automatically — a green tick means the key " +
+                "works and has been stored.",
             style = MaterialTheme.typography.bodyMedium,
         )
 
@@ -187,6 +192,7 @@ private fun KeysStep(
                 onSave = { onTest(provider) },
                 onTest = { onTest(provider) },
                 testResult = results[provider.id] ?: KeyTestResult.Untested,
+                advisory = advisories[provider.id],
             )
         }
 
@@ -198,7 +204,7 @@ private fun KeysStep(
                 .height(52.dp),
             shape = RoundedCornerShape(14.dp),
         ) {
-            Text(if (canContinue) "Continue" else "Verify all three keys to continue")
+            Text(if (canContinue) "Continue" else "Waiting for all three keys to check out")
         }
     }
 }

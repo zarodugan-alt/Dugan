@@ -44,14 +44,18 @@ import com.dugan.agent.domain.model.sanitizeKey
 /**
  * One BYOK key.
  *
- * Save and Test are separate actions on purpose. Saving is a purely local write
- * to the encrypted vault and must work with no network at all; Test additionally
- * spends a request proving the key is live. Requiring a green Test before a key
- * could be stored would make the app unusable offline and would burn quota on
- * every edit.
+ * Paste a key and it is checked against its provider automatically: the owner
+ * debounces the edit and runs the probe, and [testResult] reports what came
+ * back. The Test button is only there to re-run that check on demand.
+ *
+ * Save stays separate from verification on purpose. Saving is a purely local
+ * write to the encrypted vault and must work with no network at all; requiring
+ * a green probe before a key could be stored would make the app unusable
+ * offline and would burn quota on every edit.
  *
  * @param storedMask masked form of the key already in the vault, or null
  * @param dirty true when [value] differs from what is stored -- enables Save
+ * @param advisory shape observation about [value], shown but never blocking
  */
 @Composable
 fun KeyField(
@@ -64,6 +68,7 @@ fun KeyField(
     onTest: () -> Unit,
     testResult: KeyTestResult,
     modifier: Modifier = Modifier,
+    advisory: String? = null,
     onClear: (() -> Unit)? = null,
 ) {
     var revealed by remember { mutableStateOf(false) }
@@ -134,6 +139,10 @@ fun KeyField(
                 textStyle = MaterialTheme.typography.bodyMedium,
                 supportingText = {
                     when {
+                        // A shape hint outranks the storage status: it is the
+                        // thing the user can still act on before saving.
+                        advisory != null ->
+                            Text(advisory, color = MaterialTheme.colorScheme.error)
                         dirty && storedMask != null ->
                             Text("Unsaved change — stored key is $storedMask")
                         storedMask != null ->

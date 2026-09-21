@@ -43,8 +43,21 @@ class GroqSttClient @Inject constructor(
         pcm16: ShortArray,
         sampleRate: Int,
         language: String?,
+    ): SttResult = transcribeWith(model, pcm16, sampleRate, language, keyOverride = null)
+
+    /**
+     * @param keyOverride credential to use instead of the stored one. Only the
+     *   probe passes one, so a pasted key can be verified without being written
+     *   to the vault first.
+     */
+    private suspend fun transcribeWith(
+        model: AgentModel,
+        pcm16: ShortArray,
+        sampleRate: Int,
+        language: String?,
+        keyOverride: String?,
     ): SttResult = withContext(Dispatchers.IO) {
-        val key = vault.read(ApiProvider.Groq)
+        val key = keyOverride ?: vault.read(ApiProvider.Groq)
             ?: throw ApiException(401, provider, "Groq API key not configured")
         if (pcm16.isEmpty()) return@withContext SttResult("", isFinal = true)
 
@@ -84,10 +97,11 @@ class GroqSttClient @Inject constructor(
         }
     }
 
-    override suspend fun ping(model: AgentModel): Result<Unit> = withContext(Dispatchers.IO) {
-        // 100ms of silence: a valid key returns 200 with an empty transcript.
-        runCatching { transcribe(model, ShortArray(1600), 16_000) }.map { }
-    }
+    override suspend fun ping(model: AgentModel, keyOverride: String?): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            // 100ms of silence: a valid key returns 200 with an empty transcript.
+            runCatching { transcribeWith(model, ShortArray(1600), 16_000, null, keyOverride) }.map { }
+        }
 
     /** Never let a key or an echoed Authorization header reach a log line. */
     private fun redact(body: String, key: String): String =

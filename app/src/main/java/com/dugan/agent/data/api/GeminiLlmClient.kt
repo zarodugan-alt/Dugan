@@ -91,8 +91,8 @@ class GeminiLlmClient @Inject constructor(
      * interceptor — and it needs no percent-encoding, so a key containing
      * characters that are awkward in a query string still arrives intact.
      */
-    private fun Request.Builder.withApiKey(): Request.Builder =
-        header(GEMINI_KEY_HEADER, key())
+    private fun Request.Builder.withApiKey(keyOverride: String? = null): Request.Builder =
+        header(GEMINI_KEY_HEADER, keyOverride ?: key())
 
     private fun buildBody(
         messages: List<ChatMessage>,
@@ -190,11 +190,11 @@ class GeminiLlmClient @Inject constructor(
         }
     }
 
-    override suspend fun ping(model: AgentModel): Result<Unit> = withContext(Dispatchers.IO) {
+    override suspend fun ping(model: AgentModel, keyOverride: String?): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             val request = Request.Builder()
                 .url(ApiEndpoints.GEMINI_MODELS_PROBE + "?pageSize=1")
-                .withApiKey()
+                .withApiKey(keyOverride)
                 .build()
             probe.newCall(request).execute().use { resp ->
                 if (!resp.isSuccessful) {

@@ -103,7 +103,8 @@ class DeviceTtsClient @Inject constructor(
         }
     }.flowOn(Dispatchers.IO)
 
-    override suspend fun ping(model: AgentModel): Result<Unit> = runCatching {
+    /** Keyless: [keyOverride] is ignored; this only proves an engine exists. */
+    override suspend fun ping(model: AgentModel, keyOverride: String?): Result<Unit> = runCatching {
         engine()
         Unit
     }

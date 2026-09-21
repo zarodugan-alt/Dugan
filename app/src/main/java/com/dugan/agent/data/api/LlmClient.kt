@@ -33,5 +33,9 @@ interface LlmClient {
         maxOutputTokens: Int = 32,
     ): String
 
-    suspend fun ping(model: AgentModel): Result<Unit>
+    /**
+     * @param keyOverride credential to test instead of the stored one, so a
+     *   freshly pasted key can be verified before it is written to the vault.
+     */
+    suspend fun ping(model: AgentModel, keyOverride: String? = null): Result<Unit>
 }

@@ -17,8 +17,15 @@ interface SttClient {
         language: String? = "en",
     ): SttResult
 
-    /** Probe used by "Test Connection": a near-silent clip must come back 200. */
-    suspend fun ping(model: AgentModel): Result<Unit>
+    /**
+     * Probe used by "Test Connection" and by auto-verify on paste: a
+     * near-silent clip must come back 200.
+     *
+     * @param keyOverride credential to test instead of the stored one, so a
+     *   freshly pasted key can be verified before anything is written to the
+     *   vault. Null means "use the stored key".
+     */
+    suspend fun ping(model: AgentModel, keyOverride: String? = null): Result<Unit>
 }
 
 data class SttResult(

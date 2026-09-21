@@ -60,23 +60,35 @@ device talks to each provider directly.
 | **Google Gemini** | Reasoning / thinking | https://aistudio.google.com/apikey | ~15 RPM, ~1,500 requests/day |
 | **Unreal Speech** | Text-to-speech | https://unrealspeech.com | ~250K characters/month |
 
-**Save and Test are separate buttons**, deliberately. Save is a local write to
-the encrypted vault, works offline, and costs nothing. Test additionally spends
-one request proving the key is live — the smallest call each provider accepts.
-Requiring a green Test before a key could be stored would make the app unusable
-offline and burn quota on every edit. Keys are masked in every UI surface and
-never written to a log line.
+**Paste a key and it is checked for you.** As soon as the field has been quiet
+for 700 ms, the key is sent to its provider — the smallest request each one
+accepts — and the badge shows what came back: *Reachable*, or the provider's own
+error. In onboarding a key that checks out is stored immediately, so three
+pastes and three green ticks is the whole flow. `KeyVerifyScheduler` debounces
+per provider, cancels a check that a later edit superseded, and never re-tests a
+key that already came back reachable, so typing a key character by character
+costs one request, not fifty.
 
-**Format checks are advisory, not blocking.** A pasted key is only refused
-locally when it cannot possibly be one: blank, implausibly short, containing a
-space or line break, or another provider's key dropped into the wrong field. An
-*unrecognised prefix* is not a rejection — Test is what decides. Google
-re-issued Gemini keys from the `AIza` Standard format to the `AQ.` Auth format
-in mid-2026, and every tool that had welded `AIza` into a validator started
-refusing valid keys overnight. Each field states the shape it expects
-(`ApiProvider.keyHint`), whitespace is stripped on paste, and Gemini is called
-with the key in the `x-goog-api-key` header rather than a `?key=` query param,
-so a secret never ends up in a URL.
+The probe tests the pasted key directly (`ping(model, keyOverride)`) rather than
+writing it to the vault first, so a typo can never displace a working key. Test
+is still there as a button for re-checking on demand.
+
+**Save stays separate from verification**, deliberately. Save is a local write
+to the encrypted vault, works offline, and costs nothing. Requiring a green
+probe before a key could be stored would make the app unusable offline and burn
+quota on every edit. Keys are masked in every UI surface and never written to a
+log line.
+
+**Shape is never the verdict.** The only local rejections are inputs that cannot
+be a credential at all: blank, or carrying a space or line break. Everything
+else — an unrecognised prefix, an odd length, a key that looks like it belongs
+to another provider — is shown as an advisory next to the field and then handed
+to the provider to judge. Google re-issued Gemini keys from the `AIza` Standard
+format to the `AQ.` Auth format in mid-2026, and every tool that had welded
+`AIza` into a validator started refusing valid keys overnight. Each field states
+the shape it expects (`ApiProvider.keyHint`), whitespace is stripped on paste,
+and Gemini is called with the key in the `x-goog-api-key` header rather than a
+`?key=` query param, so a secret never ends up in a URL.
 
 **Where they live:** `EncryptedSharedPreferences` (`byok_vault.xml`) under an
 AES256-GCM master key held by the Android Keystore. The file is excluded from

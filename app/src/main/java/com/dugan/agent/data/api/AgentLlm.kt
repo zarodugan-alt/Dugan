@@ -39,5 +39,7 @@ class AgentLlm @Inject constructor(
         maxOutputTokens: Int = 32,
     ): String = clientFor(model).complete(model, messages, systemPrompt, maxOutputTokens)
 
-    suspend fun ping(model: AgentModel): Result<Unit> = clientFor(model).ping(model)
+    /** @param keyOverride lets a not-yet-saved key be verified against its provider. */
+    suspend fun ping(model: AgentModel, keyOverride: String? = null): Result<Unit> =
+        clientFor(model).ping(model, keyOverride)
 }

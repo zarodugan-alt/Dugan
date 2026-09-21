@@ -79,9 +79,10 @@ class AgentTts @Inject constructor(
         throw t
     }
 
-    suspend fun ping(model: AgentModel): Result<Unit> = when (model.id) {
-        "edge-tts" -> edge.ping(model)
-        else -> unreal.ping(model)
+    /** @param keyOverride lets a not-yet-saved key be verified against its provider. */
+    suspend fun ping(model: AgentModel, keyOverride: String? = null): Result<Unit> = when (model.id) {
+        "edge-tts" -> edge.ping(model, keyOverride)
+        else -> unreal.ping(model, keyOverride)
     }
 
     private companion object {

@@ -2,6 +2,7 @@ package com.dugan.agent.data.local
 
 import com.dugan.agent.domain.model.ApiProvider
 import com.dugan.agent.domain.model.KeyTestResult
+import com.dugan.agent.domain.model.keyAdvisory
 import com.dugan.agent.domain.model.keyProblem
 import com.dugan.agent.domain.model.looksLikeKey
 import com.dugan.agent.domain.model.maskKey
@@ -123,9 +124,12 @@ class BYOKVaultTest {
     }
 
     @Test
-    fun `unreal speech has no fixed prefix so only length and shape are checked`() {
+    fun `unreal speech accepts any shape because the provider publishes no prefix`() {
         assertTrue(looksLikeKey(ApiProvider.UnrealSpeech, "anything-long-enough-here"))
-        assertFalse(looksLikeKey(ApiProvider.UnrealSpeech, "short"))
+        // Length alone never vetoes a key: the probe is what decides.
+        assertTrue(looksLikeKey(ApiProvider.UnrealSpeech, "short"))
+        assertNull(keyProblem(ApiProvider.UnrealSpeech, "short"))
+        assertTrue(keyAdvisory(ApiProvider.UnrealSpeech, "short")!!.contains("short"))
     }
 
     @Test
@@ -136,12 +140,26 @@ class BYOKVaultTest {
     }
 
     @Test
-    fun `another provider's key pasted into the wrong field is caught locally`() {
-        val problem = keyProblem(ApiProvider.Gemini, "gsk_0123456789abcdef")
-        assertNotNull(problem)
-        assertTrue("message did not name the right provider: $problem", problem!!.contains("Groq"))
+    fun `a key in the wrong field is flagged but still tested`() {
+        // Flagged, not blocked: the wrong-field hint is a nudge, and the probe
+        // still runs, because a prefix is never proof of anything.
+        val advisory = keyAdvisory(ApiProvider.Gemini, "gsk_0123456789abcdef")
+        assertNotNull(advisory)
+        assertTrue("message did not name the right provider: $advisory", advisory!!.contains("Groq"))
+        assertNull(keyProblem(ApiProvider.Gemini, "gsk_0123456789abcdef"))
 
-        assertTrue(keyProblem(ApiProvider.Groq, "AQ.Ab8SAMPLEKEY00000000000000000000000000000000000000")!!.contains("Gemini"))
+        assertTrue(
+            keyAdvisory(
+                ApiProvider.Groq,
+                "AQ.Ab8SAMPLEKEY00000000000000000000000000000000000000",
+            )!!.contains("Gemini"),
+        )
+    }
+
+    @Test
+    fun `a key that matches its own provider has nothing to advise`() {
+        assertNull(keyAdvisory(ApiProvider.Gemini, "AQ.Ab8SAMPLEKEY00000000000000000000000000000000000000"))
+        assertNull(keyAdvisory(ApiProvider.Groq, "gsk_0123456789abcdef"))
     }
 
     @Test

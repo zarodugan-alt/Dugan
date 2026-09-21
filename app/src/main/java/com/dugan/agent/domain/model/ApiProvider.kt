@@ -111,31 +111,43 @@ fun sanitizeKey(raw: String): String =
 /**
  * Cheap structural check before burning a network round-trip.
  *
- * Deliberately permissive on shape: it rejects input that cannot possibly be a
- * key — blank, implausibly short, containing whitespace, or another provider's
- * key dropped into the wrong field — and passes everything else through to the
- * Test probe. An unknown prefix is *not* a reason to refuse the key; that
- * assumption is exactly what broke Gemini when AI Studio moved to `AQ.` keys.
+ * This is *not* a verdict and never decides whether a key works — the provider
+ * does, via [com.dugan.agent.domain.model.KeyVerifyScheduler]. It only rejects
+ * input that cannot possibly be a credential at all: blank, or carrying a space
+ * or line break, which no provider issues.
+ *
+ * Shape is deliberately not checked beyond that. Google re-issued Gemini keys
+ * from `AIza` Standard to `AQ.` Auth format in mid-2026, and every tool that
+ * had welded the old prefix into a validator started rejecting valid keys.
  */
 fun looksLikeKey(provider: ApiProvider, key: String?): Boolean =
     keyProblem(provider, key) == null
 
 /**
- * @return a human-readable reason [key] cannot be a [provider] key, or null
+ * @return a human-readable reason [key] cannot be a credential at all, or null
  *   when it is worth sending to the provider to find out.
  */
 fun keyProblem(provider: ApiProvider, key: String?): String? {
     val trimmed = key?.trim().orEmpty()
     if (trimmed.isBlank()) return "Key is empty"
-    if (trimmed.length < MIN_KEY_LENGTH) return "Key looks too short — paste the whole token"
     if (trimmed.any { it.isWhitespace() }) return "Key contains a space or line break"
     if (trimmed.any { it in INVISIBLE_CHARS }) return "Key contains invisible characters — copy it again"
-    // The one paste mistake worth catching locally: a Groq key in the Gemini
-    // field would otherwise fail with a confusing 401 from the wrong service.
+    return null
+}
+
+/**
+ * Observations about a key's shape: worth showing next to the field, never
+ * worth blocking on. The live probe still runs and still decides.
+ *
+ * The useful case is a key pasted into the wrong field — a Groq key in the
+ * Gemini box otherwise fails with a confusing 401 from the wrong service.
+ */
+fun keyAdvisory(provider: ApiProvider, key: String?): String? {
+    val trimmed = key?.trim().orEmpty()
+    if (trimmed.isBlank()) return null
     val owner = ApiProvider.entries
         .firstOrNull { it != provider && it.knownKeyPrefixes.any { prefix -> trimmed.startsWith(prefix) } }
-    if (owner != null) {
-        return "That looks like a ${owner.displayName} key — paste it in the ${owner.displayName} field"
-    }
+    if (owner != null) return "That looks like a ${owner.displayName} key — is this the right field?"
+    if (trimmed.length < MIN_KEY_LENGTH) return "That is unusually short for a ${provider.displayName} key"
     return null
 }

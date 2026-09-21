@@ -114,9 +114,10 @@ class UnrealSpeechTtsClient @Inject constructor(
         awaitClose { runCatching { call.cancel() } }
     }.flowOn(Dispatchers.IO)
 
-    override suspend fun ping(model: AgentModel): Result<Unit> = kotlinx.coroutines.withContext(Dispatchers.IO) {
+    override suspend fun ping(model: AgentModel, keyOverride: String?): Result<Unit> =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
         runCatching {
-            val key = vault.read(ApiProvider.UnrealSpeech)
+            val key = keyOverride ?: vault.read(ApiProvider.UnrealSpeech)
                 ?: throw ApiException(401, provider, "Unreal Speech key not configured")
             // Shortest accepted request. Uses a voice the endpoint documents so
             // the probe can only fail on the credential, not on the parameters.

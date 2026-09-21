@@ -2,14 +2,14 @@ package com.dugan.agent.ui.onboarding
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.dugan.agent.data.api.AgentLlm
-import com.dugan.agent.data.api.AgentTts
-import com.dugan.agent.data.api.GroqSttClient
+import com.dugan.agent.data.api.KeyVerifier
 import com.dugan.agent.data.repository.KeyRepository
 import com.dugan.agent.data.repository.SettingsRepository
 import com.dugan.agent.domain.model.ApiProvider
 import com.dugan.agent.domain.model.KeyTestResult
-import com.dugan.agent.domain.model.ModelCatalog
+import com.dugan.agent.domain.model.KeyVerifyScheduler
+import com.dugan.agent.domain.model.keyAdvisory
+import com.dugan.agent.domain.model.sanitizeKey
 import com.dugan.agent.ui.theme.AppTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,9 +23,7 @@ import javax.inject.Inject
 class OnboardingViewModel @Inject constructor(
     private val keyRepository: KeyRepository,
     private val settingsRepository: SettingsRepository,
-    private val stt: GroqSttClient,
-    private val llm: AgentLlm,
-    private val tts: AgentTts,
+    private val keyVerifier: KeyVerifier,
 ) : ViewModel() {
 
     /** 0 = keys, 1 = permissions, 2 = theme. */
@@ -41,6 +39,11 @@ class OnboardingViewModel @Inject constructor(
         MutableStateFlow(ApiProvider.entries.associate { it.id to KeyTestResult.Untested })
     val results: StateFlow<Map<String, KeyTestResult>> = _results.asStateFlow()
 
+    /** Shape observations, one per provider. Advisory only — the probe decides. */
+    private val _advisories: MutableStateFlow<Map<String, String?>> =
+        MutableStateFlow(ApiProvider.entries.associate { it.id to (null as String?) })
+    val advisories: StateFlow<Map<String, String?>> = _advisories.asStateFlow()
+
     private val _themeId = MutableStateFlow(AppTheme.CrimsonNoir.id)
     val themeId: StateFlow<String> = _themeId.asStateFlow()
 
@@ -51,36 +54,40 @@ class OnboardingViewModel @Inject constructor(
     val allKeysValid: Boolean
         get() = ApiProvider.entries.all { results.value[it.id] is KeyTestResult.Valid }
 
+    /**
+     * Verify-on-paste.
+     *
+     * Paste a key and it is sent to its provider as soon as the field goes
+     * quiet; the answer comes back from the provider itself, not from a guess
+     * about what a key should look like. A key that comes back reachable is
+     * stored straight away, so the wizard advances on proof rather than on the
+     * user finding the right button — and a key that fails is never written to
+     * the vault at all.
+     */
+    private val verifyScheduler = KeyVerifyScheduler(
+        scope = viewModelScope,
+        onState = { provider, key, result ->
+            _results.update { it + (provider.id to result) }
+            if (result.isOk) keyRepository.save(provider, key)
+        },
+        verify = { provider, key -> keyVerifier.verify(provider, key) },
+    )
+
     fun onKeyChange(provider: ApiProvider, value: String) {
-        _keys.update { it + (provider.id to value) }
-        _results.update { r -> r + (provider.id to KeyTestResult.Untested) }
+        val clean = sanitizeKey(value)
+        _keys.update { it + (provider.id to clean) }
+        _advisories.update { it + (provider.id to keyAdvisory(provider, clean)) }
+        verifyScheduler.submit(provider, clean)
     }
 
+    /** Explicit re-check, for when the user wants the answer immediately. */
     fun test(provider: ApiProvider) {
-        val value = keys.value[provider.id].orEmpty()
-        val invalid = keyRepository.validate(provider, value)
-        if (invalid != null) {
-            _results.update { it + (provider.id to KeyTestResult.Invalid(invalid)) }
+        val value = sanitizeKey(keys.value[provider.id].orEmpty())
+        if (value.isBlank()) {
+            _results.update { it + (provider.id to KeyTestResult.Invalid("No key to test")) }
             return
         }
-        _results.update { it + (provider.id to KeyTestResult.Testing) }
-        keyRepository.save(provider, value)
-
-        viewModelScope.launch {
-            val outcome = when (provider) {
-                ApiProvider.Groq -> stt.ping(ModelCatalog.DefaultStt)
-                ApiProvider.Gemini -> llm.ping(ModelCatalog.DefaultThinking)
-                ApiProvider.UnrealSpeech -> tts.ping(ModelCatalog.DefaultTts)
-            }
-            _results.update {
-                it + (
-                    provider.id to outcome.fold(
-                        onSuccess = { KeyTestResult.Valid("Reachable") },
-                        onFailure = { t -> KeyTestResult.Invalid(t.message?.take(160) ?: "Request failed") },
-                    )
-                    )
-            }
-        }
+        verifyScheduler.submitNow(provider, value)
     }
 
     fun skipPermission(permission: String) {

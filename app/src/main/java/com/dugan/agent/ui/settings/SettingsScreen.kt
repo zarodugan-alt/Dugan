@@ -100,6 +100,7 @@ fun SettingsScreen(
                         onTest = { viewModel.testKey(provider) },
                         onClear = { viewModel.clearKey(provider) },
                         testResult = row.result,
+                        advisory = row.advisory,
                     )
                 }
                 Text(

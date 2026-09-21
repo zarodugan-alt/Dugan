@@ -2,9 +2,7 @@ package com.dugan.agent.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.dugan.agent.data.api.AgentLlm
-import com.dugan.agent.data.api.AgentTts
-import com.dugan.agent.data.api.GroqSttClient
+import com.dugan.agent.data.api.KeyVerifier
 import com.dugan.agent.data.local.KeyVault
 import com.dugan.agent.data.local.TtsCache
 import com.dugan.agent.data.repository.KeyRepository
@@ -14,8 +12,11 @@ import com.dugan.agent.domain.model.AgentModel
 import com.dugan.agent.domain.model.ApiProvider
 import com.dugan.agent.domain.model.DuganSettings
 import com.dugan.agent.domain.model.KeyTestResult
+import com.dugan.agent.domain.model.KeyVerifyScheduler
 import com.dugan.agent.domain.model.ModelCatalog
+import com.dugan.agent.domain.model.keyAdvisory
 import com.dugan.agent.domain.model.maskKey
+import com.dugan.agent.domain.model.sanitizeKey
 import com.dugan.agent.domain.orchestrator.VoiceAgentOrchestrator
 import com.dugan.agent.domain.telecom.PhoneAccountRegistrar
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -34,6 +35,8 @@ data class KeyRow(
     val draft: String = "",
     val storedMask: String? = null,
     val result: KeyTestResult = KeyTestResult.Untested,
+    /** Shape observation about [draft]. Advisory only — the probe decides. */
+    val advisory: String? = null,
 ) {
     /** Save is enabled only when the draft is a real change from what is stored. */
     val isDirty: Boolean get() = draft.isNotBlank() && draft.trim() != storedMask
@@ -48,9 +51,7 @@ data class KeyRow(
 class SettingsViewModel @Inject constructor(
     private val keyRepository: KeyRepository,
     private val settingsRepository: SettingsRepository,
-    private val stt: GroqSttClient,
-    private val llm: AgentLlm,
-    private val tts: AgentTts,
+    private val keyVerifier: KeyVerifier,
     private val orchestrator: VoiceAgentOrchestrator,
     private val registrar: PhoneAccountRegistrar,
     private val vault: KeyVault,
@@ -62,6 +63,20 @@ class SettingsViewModel @Inject constructor(
 
     private val _rows = MutableStateFlow(KeyRow.emptyRows())
     val rows: StateFlow<Map<String, KeyRow>> = _rows.asStateFlow()
+
+    /**
+     * Verify-on-paste. A pasted or typed key is sent to its provider once the
+     * field has been quiet for a moment; the response — not the shape of the
+     * key — is what the badge shows.
+     */
+    private val verifyScheduler = KeyVerifyScheduler(
+        scope = viewModelScope,
+        onState = { provider, _, result ->
+            _rows.update { it + (provider.id to row(provider).copy(result = result)) }
+            refreshAecStatus()
+        },
+        verify = { provider, key -> keyVerifier.verify(provider, key) },
+    )
 
     private val _aecStatus = MutableStateFlow(AecStatus())
     val aecStatus: StateFlow<AecStatus> = _aecStatus.asStateFlow()
@@ -93,8 +108,16 @@ class SettingsViewModel @Inject constructor(
     fun row(provider: ApiProvider): KeyRow =
         _rows.value[provider.id] ?: KeyRow()
 
+    /**
+     * Called on every keystroke and on paste. The key is cleaned, any shape
+     * observation is shown next to the field, and a live check is queued.
+     */
     fun onDraftChange(provider: ApiProvider, value: String) {
-        _rows.update { it + (provider.id to row(provider).copy(draft = value, result = KeyTestResult.Untested)) }
+        val clean = sanitizeKey(value)
+        _rows.update {
+            it + (provider.id to row(provider).copy(draft = clean, advisory = keyAdvisory(provider, clean)))
+        }
+        verifyScheduler.submit(provider, clean)
     }
 
     /**
@@ -102,7 +125,7 @@ class SettingsViewModel @Inject constructor(
      * is the only thing that has to succeed for the agent to run.
      */
     fun saveKey(provider: ApiProvider) {
-        val draft = row(provider).draft.trim()
+        val draft = sanitizeKey(row(provider).draft)
         val problem = keyRepository.validate(provider, draft)
         if (problem != null) {
             _rows.update {
@@ -128,56 +151,29 @@ class SettingsViewModel @Inject constructor(
     fun clearKey(provider: ApiProvider) {
         keyRepository.clear(provider)
         ttsCache.clear()
+        verifyScheduler.forget(provider)
         _rows.update {
             it + (provider.id to KeyRow(storedMask = null, result = KeyTestResult.Untested))
         }
     }
 
     /**
-     * Smallest valid request per provider. Saves first so the client under test
-     * reads the candidate key from the vault rather than the previous one.
+     * Explicit re-check, for when the user wants the answer now rather than
+     * after the paste settles.
+     *
+     * Unlike the old implementation this does *not* write the vault first: the
+     * probe takes the candidate key directly, so testing a bad key can never
+     * displace a working one. Saving stays a separate, deliberate act.
      */
     fun testKey(provider: ApiProvider) {
-        val draft = row(provider).draft.trim().ifBlank { vault.read(provider).orEmpty() }
+        val draft = sanitizeKey(row(provider).draft).ifBlank { vault.read(provider).orEmpty() }
         if (draft.isBlank()) {
             _rows.update {
                 it + (provider.id to row(provider).copy(result = KeyTestResult.Invalid("No key to test")))
             }
             return
         }
-        val problem = keyRepository.validate(provider, draft)
-        if (problem != null) {
-            _rows.update {
-                it + (provider.id to row(provider).copy(result = KeyTestResult.Invalid(problem)))
-            }
-            return
-        }
-
-        _rows.update { it + (provider.id to row(provider).copy(result = KeyTestResult.Testing)) }
-        keyRepository.save(provider, draft)
-
-        viewModelScope.launch {
-            val outcome = when (provider) {
-                ApiProvider.Groq -> stt.ping(ModelCatalog.DefaultStt)
-                ApiProvider.Gemini -> llm.ping(ModelCatalog.DefaultThinking)
-                ApiProvider.UnrealSpeech -> tts.ping(ModelCatalog.DefaultTts)
-            }
-            _rows.update {
-                it + (
-                    provider.id to row(provider).copy(
-                        draft = "",
-                        storedMask = maskKey(draft),
-                        result = outcome.fold(
-                            onSuccess = { KeyTestResult.Valid("Reachable") },
-                            onFailure = { t ->
-                                KeyTestResult.Invalid(t.message?.take(160) ?: "Request failed")
-                            },
-                        ),
-                    )
-                    )
-            }
-            refreshAecStatus()
-        }
+        verifyScheduler.submitNow(provider, draft)
     }
 
     fun update(transform: (DuganSettings) -> DuganSettings) {
@@ -188,6 +184,7 @@ class SettingsViewModel @Inject constructor(
     fun resetAllKeys() {
         keyRepository.clearAll()
         ttsCache.clear()
+        verifyScheduler.cancelAll()
         _rows.value = KeyRow.emptyRows()
     }
 

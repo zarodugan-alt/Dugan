@@ -65,7 +65,8 @@ class GroqLlmClient @Inject constructor(
     private val probe = http.probeClient
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
-    private fun key(): String = vault.read(ApiProvider.Groq)
+    private fun key(override: String? = null): String = override
+        ?: vault.read(ApiProvider.Groq)
         ?: throw ApiException(401, provider, "Groq API key not configured")
 
     private fun request(
@@ -75,6 +76,7 @@ class GroqLlmClient @Inject constructor(
         thinkingLevel: ThinkingLevel,
         maxOutputTokens: Int,
         stream: Boolean,
+        keyOverride: String? = null,
     ): Request {
         val all = buildList {
             if (systemPrompt.isNotBlank()) add(GroqMessage("system", systemPrompt))
@@ -98,7 +100,7 @@ class GroqLlmClient @Inject constructor(
         )
         return Request.Builder()
             .url(ApiEndpoints.GROQ_CHAT)
-            .header("Authorization", "Bearer ${key()}")
+            .header("Authorization", "Bearer ${key(keyOverride)}")
             .header("Content-Type", "application/json")
             .post(json.encodeToString(GroqChatRequest.serializer(), body).toRequestBody(JSON_MEDIA))
             .build()
@@ -146,8 +148,18 @@ class GroqLlmClient @Inject constructor(
         messages: List<ChatMessage>,
         systemPrompt: String,
         maxOutputTokens: Int,
+    ): String = completeWith(model, messages, systemPrompt, maxOutputTokens, keyOverride = null)
+
+    private suspend fun completeWith(
+        model: AgentModel,
+        messages: List<ChatMessage>,
+        systemPrompt: String,
+        maxOutputTokens: Int,
+        keyOverride: String?,
     ): String = withContext(Dispatchers.IO) {
-        probe.newCall(request(model, messages, systemPrompt, ThinkingLevel.Quick, maxOutputTokens, false))
+        probe.newCall(
+            request(model, messages, systemPrompt, ThinkingLevel.Quick, maxOutputTokens, false, keyOverride),
+        )
             .execute().use { resp ->
                 val body = resp.body?.string().orEmpty()
                 if (!resp.isSuccessful) throw ApiException(resp.code, provider, body.take(300))
@@ -161,11 +173,12 @@ class GroqLlmClient @Inject constructor(
             }
     }
 
-    override suspend fun ping(model: AgentModel): Result<Unit> = withContext(Dispatchers.IO) {
-        runCatching {
-            complete(model, listOf(ChatMessage("user", "ping")), "", 1)
-        }.map { }
-    }
+    override suspend fun ping(model: AgentModel, keyOverride: String?): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                completeWith(model, listOf(ChatMessage("user", "ping")), "", 1, keyOverride)
+            }.map { }
+        }
 
     private companion object {
         val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()

@@ -112,7 +112,8 @@ class EdgeTtsClient @Inject constructor(
         awaitClose { runCatching { ws.cancel() } }
     }.flowOn(Dispatchers.IO)
 
-    override suspend fun ping(model: AgentModel): Result<Unit> = Result.success(Unit)
+    /** Keyless: nothing to verify, and [keyOverride] is ignored. */
+    override suspend fun ping(model: AgentModel, keyOverride: String?): Result<Unit> = Result.success(Unit)
 
     /**
      * `Sec-MS-GEC` is SHA-256 over the Windows file-time tick count (100ns since
