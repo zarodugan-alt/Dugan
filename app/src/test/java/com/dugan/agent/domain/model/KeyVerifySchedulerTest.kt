@@ -160,7 +160,7 @@ class KeyVerifySchedulerTest {
         val rec = Recorder { Result.success(Unit) }
         val scheduler = scheduler(this, rec)
 
-        scheduler.submitNow(ApiProvider.UnrealSpeech, key)
+        scheduler.submitNow(ApiProvider.Groq, key)
         advanceTimeBy(1)
         runCurrent()
 

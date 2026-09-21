@@ -1,6 +1,6 @@
 package com.dugan.agent.domain.model
 
-/** The three BYOK endpoints the device talks to directly. No proxy, no backend. */
+/** The two BYOK endpoints the device talks to directly. No proxy, no backend. */
 enum class ApiProvider(
     val id: String,
     val displayName: String,
@@ -29,10 +29,10 @@ enum class ApiProvider(
         id = "groq",
         displayName = "Groq",
         emoji = "🎤",
-        role = "Speech-to-Text",
+        role = "Hearing + Speaking",
         signupUrl = "https://console.groq.com/keys",
         knownKeyPrefixes = listOf("gsk_"),
-        keyHint = "gsk_…",
+        keyHint = "gsk_…  (one key covers both hearing and speaking)",
     ),
     Gemini(
         id = "gemini",
@@ -46,17 +46,6 @@ enum class ApiProvider(
         // still recognisable as a Gemini key.
         knownKeyPrefixes = listOf("AQ.", "AIza", "ya29."),
         keyHint = "AQ.Ab…  (older AIza… keys still work)",
-    ),
-    UnrealSpeech(
-        id = "unreal_speech",
-        displayName = "Unreal Speech",
-        emoji = "🗣️",
-        role = "Text-to-Speech",
-        signupUrl = "https://unrealspeech.com",
-        // Bearer token from the Unreal Speech dashboard. The provider documents
-        // no prefix, so the field says so explicitly instead of guessing.
-        knownKeyPrefixes = emptyList(),
-        keyHint = "dashboard API key — any shape, sent as a Bearer token",
     ),
     ;
 
@@ -86,7 +75,7 @@ fun maskKey(key: String?): String {
     return trimmed.take(4) + "•".repeat(8) + trimmed.takeLast(4)
 }
 
-/** Shortest string that could plausibly be an API key from any of the three. */
+/** Shortest string that could plausibly be an API key from either provider. */
 private const val MIN_KEY_LENGTH = 16
 
 /**

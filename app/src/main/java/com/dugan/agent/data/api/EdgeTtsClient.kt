@@ -21,7 +21,7 @@ import javax.inject.Singleton
 /**
  * Keyless fallback TTS: Microsoft Edge's read-aloud endpoint.
  *
- * Used only when Unreal Speech returns 429/402, so a mid-conversation quota
+ * Used only when Groq TTS returns 429/402, so a mid-conversation quota
  * exhaustion degrades to a different voice instead of silencing the agent.
  * No API key exists for this service; it authenticates with the public
  * `TrustedClientToken` plus a time-bucketed `Sec-MS-GEC` challenge.
@@ -48,8 +48,12 @@ class EdgeTtsClient @Inject constructor(
         }
 
         val collected = ByteArrayOutputStream()
-        val voice = if (voiceId.contains('-')) voiceId else "en-US-$voiceId"
-        // Unreal's -1f..1f maps onto Edge's -50%..+50%.
+        // The configured voice is a Groq Orpheus name (hannah, troy, ...), which
+        // Edge has never heard of. Use it only when it is already a full Edge
+        // voice name; otherwise fall back to Edge's own default rather than
+        // asking for a voice that does not exist.
+        val voice = if (voiceId.contains('-')) voiceId else DEFAULT_VOICE
+        // The -1f..1f playback range maps onto Edge's -50%..+50%.
         val rate = ((speed * 50).toInt()).let { if (it >= 0) "+$it%" else "$it%" }
 
         val request = Request.Builder()
@@ -158,6 +162,13 @@ class EdgeTtsClient @Inject constructor(
 
     private companion object {
         const val TRUSTED_CLIENT_TOKEN = "6A5AA1D4EAFF4E9FB37E23D68491D6F4"
+
+        /**
+         * Edge's own default. The voice the user picks belongs to Groq's Orpheus
+         * catalogue, which has no Edge equivalent, so this tier uses a voice it
+         * knows exists instead of requesting one that does not.
+         */
+        const val DEFAULT_VOICE = "en-US-AriaNeural"
         const val USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0"
         const val EPOCH_DIFF_MS = 11_644_473_600_000L

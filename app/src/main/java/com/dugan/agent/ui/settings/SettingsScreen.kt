@@ -330,7 +330,7 @@ fun SettingsScreen(
             onDismissRequest = { showResetDialog = false },
             title = { Text("Reset all API keys?") },
             text = {
-                Text("This deletes all three keys from the encrypted vault. You will need to paste them again.")
+                Text("This deletes both keys from the encrypted vault. You will need to paste them again.")
             },
             confirmButton = {
                 TextButton(onClick = {

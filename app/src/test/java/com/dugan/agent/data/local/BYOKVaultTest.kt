@@ -38,15 +38,15 @@ class BYOKVaultTest {
     }
 
     @Test
-    fun `hasAllRequired needs all three providers`() {
+    fun `hasAllRequired needs both providers`() {
         val vault = InMemoryKeyVault()
         assertFalse(vault.hasAllRequired())
 
+        // One Groq key covers hearing and speaking, so two keys are the lot.
         vault.write(ApiProvider.Groq, "gsk_0123456789abcdef")
-        vault.write(ApiProvider.Gemini, "AIza0123456789abcdef")
         assertFalse(vault.hasAllRequired())
 
-        vault.write(ApiProvider.UnrealSpeech, "us_0123456789abcdef")
+        vault.write(ApiProvider.Gemini, "AIza0123456789abcdef")
         assertTrue(vault.hasAllRequired())
     }
 
@@ -124,12 +124,20 @@ class BYOKVaultTest {
     }
 
     @Test
-    fun `unreal speech accepts any shape because the provider publishes no prefix`() {
-        assertTrue(looksLikeKey(ApiProvider.UnrealSpeech, "anything-long-enough-here"))
-        // Length alone never vetoes a key: the probe is what decides.
-        assertTrue(looksLikeKey(ApiProvider.UnrealSpeech, "short"))
-        assertNull(keyProblem(ApiProvider.UnrealSpeech, "short"))
-        assertTrue(keyAdvisory(ApiProvider.UnrealSpeech, "short")!!.contains("short"))
+    fun `a short key is not vetoed, only remarked on`() {
+        // Length alone never refuses a key: the probe is what decides.
+        assertTrue(looksLikeKey(ApiProvider.Groq, "short"))
+        assertNull(keyProblem(ApiProvider.Groq, "short"))
+        assertTrue(keyAdvisory(ApiProvider.Groq, "short")!!.contains("short"))
+    }
+
+    @Test
+    fun `exactly two providers remain, groq for speech and gemini for thought`() {
+        assertEquals(
+            listOf("groq", "gemini"),
+            ApiProvider.entries.map { it.id },
+        )
+        assertTrue("Groq now covers both speech directions", ApiProvider.Groq.role.contains("Speaking"))
     }
 
     @Test

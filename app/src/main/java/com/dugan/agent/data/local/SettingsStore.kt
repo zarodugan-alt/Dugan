@@ -47,7 +47,7 @@ class SettingsStore @Inject constructor(
             silenceThresholdMs = p[K.silenceThreshold] ?: 700,
             echoSuppression = p[K.echoSuppression] ?: 1.0f,
             playbackSpeed = p[K.playbackSpeed] ?: 0f,
-            ttsVoiceId = p[K.ttsVoice] ?: "Aria",
+            ttsVoiceId = p[K.ttsVoice] ?: DuganSettings().ttsVoiceId,
             streamingStt = p[K.streamingStt] ?: true,
             speculativeLlm = p[K.speculativeLlm] ?: true,
             ttsCaching = p[K.ttsCaching] ?: true,

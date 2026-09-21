@@ -13,10 +13,10 @@ object ApiEndpoints {
     fun geminiGenerate(model: String) =
         "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent"
 
-    // Unreal Speech
-    const val UNREAL_STREAM = "https://api.v7.unrealspeech.com/stream"
+    // Groq text-to-speech (Orpheus). Same key as the Groq endpoints above.
+    const val GROQ_SPEECH = "https://api.groq.com/openai/v1/audio/speech"
 
-    // Keyless TTS fallback, used when Unreal quota is exhausted.
+    // Keyless TTS fallback, used when Groq quota is exhausted.
     const val EDGE_TTS_LIST_URL =
         "https://speech.platform.bing.com/consumer/speech/synthesize/readaloud/voices/list?trustedclienttoken=6A5AA1D4EAFF4E9FB37E23D68491D6F4"
 

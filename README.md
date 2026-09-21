@@ -4,8 +4,8 @@ A single-device Android voice agent in Kotlin + Jetpack Compose. It listens to a
 phone call, understands the conversation, and answers in synthesised speech
 through the loudspeaker.
 
-**No backend.** The phone calls Groq, Gemini and Unreal Speech directly. Keys
-live in `EncryptedSharedPreferences` on the device and nowhere else.
+**No backend.** The phone calls Groq and Gemini directly. Keys live in
+`EncryptedSharedPreferences` on the device and nowhere else.
 
 > ⚠️ **Read [Known limitations](#known-limitations) before you build this.** The
 > headline one: Android 9+ denies third-party apps access to SIM call audio, so
@@ -44,7 +44,7 @@ gradle wrapper --gradle-version 8.9
 ./gradlew installDebug
 ```
 
-On first launch the onboarding wizard walks you through the three API keys,
+On first launch the onboarding wizard walks you through the two API keys,
 runtime permissions, and a theme. Nothing works until the keys test green.
 
 ---
@@ -56,15 +56,18 @@ device talks to each provider directly.
 
 | Provider | Used for | Where to sign up | Free tier (at time of writing) |
 |---|---|---|---|
-| **Groq** | Speech-to-text (Whisper) | https://console.groq.com/keys | ~2,000 requests/day |
+| **Groq** | Speech-to-text (Whisper) **and** text-to-speech (Orpheus) | https://console.groq.com/keys | ~2,000 requests/day |
 | **Google Gemini** | Reasoning / thinking | https://aistudio.google.com/apikey | ~15 RPM, ~1,500 requests/day |
-| **Unreal Speech** | Text-to-speech | https://unrealspeech.com | ~250K characters/month |
+
+One Groq key does both speech directions, which is why there are two keys and
+not three: one signup, one quota to watch, one less credential to expire
+mid-call.
 
 **Paste a key and it is checked for you.** As soon as the field has been quiet
 for 700 ms, the key is sent to its provider — the smallest request each one
 accepts — and the badge shows what came back: *Reachable*, or the provider's own
 error. In onboarding a key that checks out is stored immediately, so three
-pastes and three green ticks is the whole flow. `KeyVerifyScheduler` debounces
+pastes and two green ticks is the whole flow. `KeyVerifyScheduler` debounces
 per provider, cancels a check that a later edit superseded, and never re-tests a
 key that already came back reachable, so typing a key character by character
 costs one request, not fifty.
@@ -147,8 +150,8 @@ UI (Compose)  →  ViewModels  →  Domain  →  Data  →  Network
 ```
 app/src/main/java/com/dugan/agent/
 ├── data/
-│   ├── api/          GroqSttClient, GeminiLlmClient, GroqLlmClient,
-│   │                 UnrealSpeechTtsClient, EdgeTtsClient, AgentLlm, AgentTts
+│   ├── api/          GroqSttClient, GroqTtsClient, GeminiLlmClient,
+│   │                 GroqLlmClient, EdgeTtsClient, KeyVerifier, AgentLlm, AgentTts
 │   ├── local/        BYOKVault, SettingsStore, ChatHistoryDb, TtsCache
 │   ├── repository/   Key, Settings, History, Contact
 │   └── signaling/    SignalingClient (+ optional Firebase in src/firebase)
@@ -354,10 +357,15 @@ compiler. Expect to fix ordinary type errors on the first real build.
 4. **Barge-in depends on layer 4.** With mic gating on and barge-in off, you
    cannot interrupt the agent while it speaks.
 5. **Layer 2 is NLMS, not AEC3.** Direct-path echo only; reverberation survives.
-6. **Free-tier limits apply:** Gemini ~15 RPM, Groq ~2,000 RPD, Unreal Speech
-   ~250K characters/month. TTS degrades in two steps: keyless Edge TTS on
-   429/402, then the platform's own `TextToSpeech` if the network is gone
-   entirely. The final tier always works but sounds markedly worse.
+6. **Free-tier limits apply:** Gemini ~15 RPM, Groq ~2,000 RPD — and Groq now
+   carries both Whisper and TTS, so a long call spends that budget twice as
+   fast. TTS degrades in two steps: keyless Edge TTS on 429/402, then the
+   platform's own `TextToSpeech` if the network is gone entirely. The final
+   tier always works but sounds markedly worse.
+6a. **Groq Orpheus takes no speed parameter**, so the Playback speed setting is
+   ignored while the Groq voice is in use (both fallback tiers honour it). Its
+   `input` is capped at 200 characters, so sentences longer than that are cut on
+   a word boundary and played back to back.
 7. **Echo cancellation quality is device-dependent.** Some OEMs report
    `AcousticEchoCanceler.isAvailable() == true` and do not apply it. Check
    Settings → Audio for what is actually live.

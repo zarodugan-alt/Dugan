@@ -13,8 +13,8 @@ import javax.inject.Singleton
 /**
  * TTS with two levels of degradation.
  *
- * 1. **Unreal Speech** — the configured voice.
- * 2. **Edge TTS** — keyless, engaged when Unreal reports 429/402.
+ * 1. **Groq Orpheus** — the configured voice, on the same key as STT.
+ * 2. **Edge TTS** — keyless, engaged when Groq reports 429/402.
  * 3. **Platform TTS** — no network at all, engaged when both above fail.
  *
  * Each switch is remembered for the life of the process so a failing provider
@@ -22,30 +22,30 @@ import javax.inject.Singleton
  */
 @Singleton
 class AgentTts @Inject constructor(
-    private val unreal: UnrealSpeechTtsClient,
+    private val groq: GroqTtsClient,
     private val edge: EdgeTtsClient,
     private val device: DeviceTtsClient,
 ) {
     @Volatile
-    private var unrealExhausted = false
+    private var groqExhausted = false
 
     @Volatile
     private var networkTtsDown = false
 
     /** Reset when the user edits a key or the hour rolls over. */
     fun resetFallback() {
-        unrealExhausted = false
+        groqExhausted = false
         networkTtsDown = false
     }
 
     fun synthesize(model: AgentModel, text: String, voiceId: String, speed: Float): Flow<ShortArray> = flow {
         if (text.isBlank()) return@flow
 
-        // Tier 1: Unreal Speech.
-        if (!unrealExhausted && !networkTtsDown && model.id != "edge-tts") {
+        // Tier 1: Groq Orpheus.
+        if (!groqExhausted && !networkTtsDown && model.id != "edge-tts") {
             val audio = runCatching {
-                withRetry("unreal-tts", attempts = 2) {
-                    unreal.synthesize(model, text, voiceId, speed).toList()
+                withRetry("groq-tts", attempts = 2) {
+                    groq.synthesize(model, text, voiceId, speed).toList()
                 }
             }
             if (audio.isSuccess) {
@@ -54,10 +54,10 @@ class AgentTts @Inject constructor(
             }
             val failure = audio.exceptionOrNull()
             if (failure is ApiException && failure.isQuota) {
-                AgentLog.w(TAG, "Unreal Speech quota exhausted; moving to Edge TTS")
-                unrealExhausted = true
+                AgentLog.w(TAG, "Groq TTS quota exhausted; moving to Edge TTS")
+                groqExhausted = true
             } else {
-                AgentLog.w(TAG, "Unreal Speech failed (${failure?.javaClass?.simpleName}); moving to Edge TTS")
+                AgentLog.w(TAG, "Groq TTS failed (${failure?.javaClass?.simpleName}); moving to Edge TTS")
             }
         }
 
@@ -82,7 +82,7 @@ class AgentTts @Inject constructor(
     /** @param keyOverride lets a not-yet-saved key be verified against its provider. */
     suspend fun ping(model: AgentModel, keyOverride: String? = null): Result<Unit> = when (model.id) {
         "edge-tts" -> edge.ping(model, keyOverride)
-        else -> unreal.ping(model, keyOverride)
+        else -> groq.ping(model, keyOverride)
     }
 
     private companion object {

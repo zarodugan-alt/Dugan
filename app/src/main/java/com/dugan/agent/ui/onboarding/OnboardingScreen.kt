@@ -174,9 +174,9 @@ private fun KeysStep(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            "You need three keys. All three have a usable free tier. Paste one and it is " +
-                "checked against the provider automatically — a green tick means the key " +
-                "works and has been stored.",
+            "You need two keys. Both have a usable free tier. Paste one and it is checked " +
+                "against the provider automatically — a green tick means the key works and " +
+                "has been stored. The Groq key covers both hearing and speaking.",
             style = MaterialTheme.typography.bodyMedium,
         )
 
@@ -204,7 +204,7 @@ private fun KeysStep(
                 .height(52.dp),
             shape = RoundedCornerShape(14.dp),
         ) {
-            Text(if (canContinue) "Continue" else "Waiting for all three keys to check out")
+            Text(if (canContinue) "Continue" else "Waiting for both keys to check out")
         }
     }
 }

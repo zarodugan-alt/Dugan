@@ -19,11 +19,11 @@ object AgentLog {
     /**
      * Prefixes we can recognise well enough to scrub. Gemini gained the `AQ.`
      * Auth-key format in 2026 alongside the legacy `AIza` / `ya29.` Standard
-     * keys, so all three are listed -- a validator that only knew the old
-     * shapes is how a live key ends up in a shared log dump.
+     * keys, so all three Gemini shapes are listed next to Groq's `gsk_` -- a
+     * scrubber that only knew the old shapes is how a live key ends up in a
+     * shared log dump.
      *
-     * Unreal Speech publishes no prefix, so its tokens cannot be matched by
-     * shape; nothing about them is ever logged.
+     * Both providers the app talks to publish a prefix, so both are covered.
      */
     private const val KEY_SHAPE = "\\b(?:gsk_|AIza|ya29\\.|AQ\\.)[A-Za-z0-9_\\-]{8,}\\b"
 

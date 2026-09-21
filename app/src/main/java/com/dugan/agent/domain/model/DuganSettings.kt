@@ -42,7 +42,11 @@ data class DuganSettings(
     val echoSuppression: Float = 1.0f,
     /** -1f..1f, passed straight to the TTS provider. */
     val playbackSpeed: Float = 0f,
-    val ttsVoiceId: String = "Aria",
+    /**
+     * A Groq Orpheus voice: hannah, autumn, diana, austin, daniel, troy. The
+     * keyless Edge TTS tier cannot use these and substitutes its own default.
+     */
+    val ttsVoiceId: String = "hannah",
 
     // Latency toggles
     val streamingStt: Boolean = true,

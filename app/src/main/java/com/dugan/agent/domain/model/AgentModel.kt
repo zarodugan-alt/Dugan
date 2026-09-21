@@ -98,15 +98,16 @@ object ModelCatalog {
     )
 
     /**
-     * TTS "models" are endpoints rather than weights. `unreal-stream` is primary;
-     * `edge-tts` is the keyless fallback used when Unreal quota is exhausted.
+     * TTS "models" are endpoints rather than weights. `groq-tts` is primary and
+     * runs on the same key as STT; `edge-tts` is the keyless fallback used when
+     * Groq quota is exhausted.
      */
     val TtsModels: List<AgentModel> = listOf(
         AgentModel(
-            id = "unreal-stream",
-            wireId = "stream",
-            displayName = "Unreal Speech /stream",
-            provider = ModelProvider.Gemini,
+            id = "groq-tts",
+            wireId = "canopylabs/orpheus-v1-english",
+            displayName = "Groq Orpheus TTS",
+            provider = ModelProvider.Groq,
             supportsThinking = false,
         ),
         AgentModel(

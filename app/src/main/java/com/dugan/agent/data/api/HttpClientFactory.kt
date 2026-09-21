@@ -11,7 +11,7 @@ import javax.inject.Singleton
  *
  * The whole point is connection warm-up: HTTP/2 keeps a single multiplexed
  * connection per origin alive, so a turn does not pay a 50-200ms TCP+TLS
- * handshake to Groq/Gemini/Unreal every time.
+ * handshake to Groq/Gemini every time.
  */
 @Singleton
 class HttpClientFactory @Inject constructor() {

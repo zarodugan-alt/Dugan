@@ -42,7 +42,6 @@ android {
         // keys.properties exists locally.
         buildConfigField("String", "SEED_GROQ_KEY", "\"${localKeys.getProperty("GROQ_API_KEY", "")}\"")
         buildConfigField("String", "SEED_GEMINI_KEY", "\"${localKeys.getProperty("GEMINI_API_KEY", "")}\"")
-        buildConfigField("String", "SEED_UNREAL_KEY", "\"${localKeys.getProperty("UNREAL_SPEECH_API_KEY", "")}\"")
         buildConfigField("boolean", "FIREBASE_SIGNALLING", "$enableFirebase")
     }
 

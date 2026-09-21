@@ -21,7 +21,7 @@ class ConnectionWarmup @Inject constructor(
             listOf(
                 ApiEndpoints.GROQ_TRANSCRIPTIONS,
                 ApiEndpoints.GROQ_CHAT,
-                ApiEndpoints.UNREAL_STREAM,
+                ApiEndpoints.GROQ_SPEECH,
                 ApiEndpoints.geminiGenerate("gemini-2.5-flash"),
             ),
         )

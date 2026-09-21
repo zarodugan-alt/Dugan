@@ -22,12 +22,12 @@ import kotlin.coroutines.resume
 /**
  * Last-resort TTS: the platform's own speech engine.
  *
- * No key, no quota, no network. Voice quality is a clear step down from Unreal
+ * No key, no quota, no network. Voice quality is a clear step down from Groq
  * Speech and the first call pays engine initialisation, but it means a quota
  * exhaustion mid-call degrades to a robotic voice rather than to silence -- and
  * on a phone call, silence is the failure the other person cannot recover from.
  *
- * Reached only after Unreal Speech and Edge TTS have both failed.
+ * Reached only after Groq TTS and Edge TTS have both failed.
  */
 @Singleton
 class DeviceTtsClient @Inject constructor(
@@ -77,7 +77,7 @@ class DeviceTtsClient @Inject constructor(
                 }
             })
             val params = android.os.Bundle()
-            // Unreal's -1f..1f maps onto the platform's 0.5x..2.0x rate.
+            // The -1f..1f playback range maps onto the platform's 0.5x..2.0x rate.
             tts.setSpeechRate(1f + speed.coerceIn(-1f, 1f) * 0.5f)
             val result = tts.synthesizeToFile(text, params, out, "dugan-${System.currentTimeMillis()}")
             if (result != TextToSpeech.SUCCESS && cont.isActive) cont.resume(false)

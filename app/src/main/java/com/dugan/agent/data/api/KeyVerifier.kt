@@ -17,16 +17,19 @@ import javax.inject.Singleton
  * a provider can re-prefix its tokens at any time (Gemini went from `AIza` to
  * `AQ.` in 2026) and the endpoint is the only thing that knows the truth.
  */
+/**
+ * One Groq key covers both Whisper and Orpheus TTS, so a single probe settles
+ * it: the cheapest one is the transcription request, and a credential that
+ * authenticates there authenticates on `/audio/speech` too.
+ */
 @Singleton
 class KeyVerifier @Inject constructor(
     private val stt: GroqSttClient,
     private val llm: AgentLlm,
-    private val tts: AgentTts,
 ) {
     /** @param key the credential to test, exactly as pasted. */
     suspend fun verify(provider: ApiProvider, key: String): Result<Unit> = when (provider) {
         ApiProvider.Groq -> stt.ping(ModelCatalog.DefaultStt, key)
         ApiProvider.Gemini -> llm.ping(ModelCatalog.DefaultThinking, key)
-        ApiProvider.UnrealSpeech -> tts.ping(ModelCatalog.DefaultTts, key)
     }
 }

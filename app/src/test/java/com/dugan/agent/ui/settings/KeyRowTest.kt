@@ -29,8 +29,8 @@ class KeyRowTest {
     }
 
     @Test
-    fun `empty rows cover all three providers`() {
-        assertEquals(3, KeyRow.emptyRows().size)
+    fun `empty rows cover both providers`() {
+        assertEquals(2, KeyRow.emptyRows().size)
         assertTrue(KeyRow.emptyRows().values.all { it.draft.isEmpty() && it.storedMask == null })
     }
 
