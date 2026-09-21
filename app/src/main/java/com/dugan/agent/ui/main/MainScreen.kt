@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,6 +43,10 @@ import com.dugan.agent.ui.components.ThinkingSelector
 /**
  * The agent screen: status pill, orb, transcript, thinking selector, model chips
  * and the input bar.
+ *
+ * The top bar carries two separate actions, which used to be collapsed into one
+ * mislabelled button: **Clear conversation** (broom) resets the transcript, and
+ * **Settings** (gear) opens the settings route via [onOpenSettings].
  */
 @Composable
 fun MainScreen(
@@ -86,10 +91,17 @@ fun MainScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 StatePill(phase = agent.phase, callState = agent.callState)
-                IconButton(onClick = onOpenSettings) {
+                IconButton(onClick = { viewModel.clearConversation() }) {
                     Icon(
                         Icons.Filled.DeleteSweep,
                         contentDescription = "Clear conversation",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                IconButton(onClick = onOpenSettings) {
+                    Icon(
+                        Icons.Filled.Settings,
+                        contentDescription = "Settings",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }

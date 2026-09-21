@@ -1,6 +1,7 @@
 package com.dugan.agent
 
 import com.dugan.agent.util.AgentLog
+import com.dugan.agent.util.CrashLog
 import android.app.Application
 import com.dugan.agent.data.local.TtsCache
 import com.dugan.agent.domain.audio.SileroVadEngine
@@ -42,6 +43,10 @@ class DuganApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+
+        // First, before injection and model loading: a startup failure is the
+        // hardest kind to diagnose, and this is what makes it readable.
+        CrashLog.install(this)
 
         scope.launch {
             // Optional on-device models. Both return null when their asset is not

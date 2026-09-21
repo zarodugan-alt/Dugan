@@ -20,6 +20,7 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
@@ -253,6 +254,40 @@ fun SettingsScreen(
                 }
             }
 
+            SectionCard(title = "Diagnostics", icon = "🩺") {
+                val lastCrash by viewModel.lastCrash.collectAsStateWithLifecycle()
+                if (lastCrash == null) {
+                    SettingsRow(
+                        label = "Last crash",
+                        supporting = "Nothing recorded. A crash is captured here automatically so it can be read without adb.",
+                    ) {
+                        Text("None")
+                    }
+                } else {
+                    Text(
+                        "Last crash",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        lastCrash.orEmpty(),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 14,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = viewModel::clearCrashLog,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Dismiss")
+                    }
+                }
+            }
+
             SectionCard(title = "About", icon = "ℹ️") {
                 SettingsRow(label = "Version", supporting = null) { Text("1.0.0") }
                 SettingsRow(
@@ -381,7 +416,17 @@ private fun ModelDropdown(
     onSelect: (AgentModel) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val selected = options.firstOrNull { it.id == selectedId } ?: options.first()
+    // firstOrNull twice: an unknown id falls back to the first option, and an
+    // empty list falls back to nothing rather than throwing.
+    val selected = options.firstOrNull { it.id == selectedId } ?: options.firstOrNull()
+    if (selected == null) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        return
+    }
 
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
         OutlinedTextField(

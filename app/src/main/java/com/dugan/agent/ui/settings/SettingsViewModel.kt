@@ -19,6 +19,7 @@ import com.dugan.agent.domain.model.maskKey
 import com.dugan.agent.domain.model.sanitizeKey
 import com.dugan.agent.domain.orchestrator.VoiceAgentOrchestrator
 import com.dugan.agent.domain.telecom.PhoneAccountRegistrar
+import com.dugan.agent.util.CrashLog
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -87,6 +88,22 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
     val isDefaultDialer: Boolean get() = registrar.isDefaultDialer()
+
+    /**
+     * The most recent uncaught exception, captured by [CrashLog] in the
+     * Application. Null when the app has never crashed.
+     *
+     * A crash normally takes its logcat with it; this is what makes one
+     * diagnosable from the device itself, with no `adb` attached.
+     */
+    private val _lastCrash = MutableStateFlow(CrashLog.last())
+    val lastCrash: StateFlow<String?> = _lastCrash.asStateFlow()
+
+    /** Drops the stored crash record once it has been read. */
+    fun clearCrashLog() {
+        CrashLog.clear()
+        _lastCrash.value = null
+    }
 
     /** Intent for the system role prompt, or null when the role is already held. */
     fun requestDialerRoleIntent(): android.content.Intent? = registrar.requestDefaultDialerIntent()
