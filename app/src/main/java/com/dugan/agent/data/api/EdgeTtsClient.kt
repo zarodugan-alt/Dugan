@@ -100,7 +100,10 @@ class EdgeTtsClient @Inject constructor(
                     if (bytes.isEmpty()) return
                     collected.reset()
                     val decoded = AudioDecoder.decode(bytes) ?: return
-                    val frame = decoded.sampleRate / 50
+                    // Guarded like every other frame loop in the app: an
+                    // underrun sample rate would make frame 0, len 0, and
+                    // offset += 0 -- a non-terminating emit loop.
+                    val frame = (decoded.sampleRate / 50).coerceAtLeast(1)
                     var offset = 0
                     while (offset < decoded.pcm.size) {
                         val len = minOf(frame, decoded.pcm.size - offset)
